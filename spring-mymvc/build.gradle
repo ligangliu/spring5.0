@@ -1,0 +1,23 @@
+plugins {
+    id 'java'
+}
+
+group 'org.springframework'
+version '5.0.16.BUILD-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile fileTree(dir: 'lib',includes: ['*jar'])
+    compile group: 'org.apache.tomcat.embed', name: 'tomcat-embed-core', version: '8.5.33'
+    compile(project(":spring-context"))
+//    但是会报错，会有org.springframework.oxm不存在的情况
+    //这是因为在spring-oxm项目中的test中的org.springframework.oxm.castor中的测试类中有一个Flight不对
+    //这要把这些对应的测试类注释掉即可编译该项目,简单粗暴的方式直接将其test删除
+    compile(project(":spring-webmvc"))
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
