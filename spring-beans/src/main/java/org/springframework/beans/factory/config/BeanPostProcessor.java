@@ -20,12 +20,12 @@ import org.springframework.beans.BeansException;
 import org.springframework.lang.Nullable;
 
 /**
- * BeanPostProcessor是spring框架的一个拓展点(不止一个，spring有很多的拓展点,
- *   如BeanFactoryPostProcessor也是一个非常重要的拓展点)
- * 通过实现BeanPostProcessor，我们程序员就可以插手spring的bean的初始化过程。
- * 这个接口可以有多个实现类，形成一个列表，然后依次执行
- * （但是spring默认的怎么办？没有@Component注解，那么是怎么搞得呢？它就是spring自己手动天啊及的）
- * spring提供了很多默认的后置处理器实现
+ BeanPostProcessor是spring框架的一个拓展点(不止一个，spring有很多的拓展点,
+    如BeanFactoryPostProcessor也是一个非常重要的拓展点)
+ 通过实现BeanPostProcessor，我们程序员就可以插手spring的bean的初始化过程。
+ 这个接口可以有多个实现类，形成一个列表，然后依次执行
+ （但是spring默认的怎么办？没有@Component注解，那么是怎么搞得呢？它就是spring自己手动添加的）
+ spring提供了很多默认的后置处理器实现
  * 1.ApplicationContextAwareProcessor
  * 2.InitDestroyAnnotationBeanPostProcessor
  * 3.BeanNameAutoProxyCreator
@@ -54,7 +54,8 @@ import org.springframework.lang.Nullable;
 public interface BeanPostProcessor {
 
 	/**
-	 * 在bean初始化之前执行
+	 在bean初始化之前执行,会使得我们有能力去查收bean的生成过程。如我们这里将bean改成代理类，
+	 这还不是so easy了嘛？我们就返回一个代理对象，AOP就是这么干的
 	 * Apply this BeanPostProcessor to the given new bean instance <i>before</i> any bean
 	 * initialization callbacks (like InitializingBean's {@code afterPropertiesSet}
 	 * or a custom init-method). The bean will already be populated with property values.
@@ -73,7 +74,7 @@ public interface BeanPostProcessor {
 	}
 
 	/**
-	 * 在bean初始化之后执行
+	 在bean初始化之后执行
 	 * Apply this BeanPostProcessor to the given new bean instance <i>after</i> any bean
 	 * initialization callbacks (like InitializingBean's {@code afterPropertiesSet}
 	 * or a custom init-method). The bean will already be populated with property values.

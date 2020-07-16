@@ -264,7 +264,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		 * 		return new IndexDao1();
 		 * 	}
 		 * 	cglib代理主要是处理对于这种配置情况。
-		 * 	在indexDao1()中调用indexDao()的时候，通过代理我们可以将indexDao()方法中什么都不干。
+		 * 	在indexDao1()中调用indexDao()的时候，通过代理我们可以将indexDao()中加一个beanFactory，然后后面是从beanFactory.getBean("")来获取
 		 *
 		 *
 		 */
@@ -280,8 +280,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 	 * {@link Configuration} classes.
 	 */
 	/**
-	 * 拿出所有的bd,判断bd是否包含@Configuration
-	 * 然后做相应的处理
+	 * 拿出所有的bd,判断bd是否包含@Configuration 然后做相应的处理
 	 */
 	public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
 		List<BeanDefinitionHolder> configCandidates = new ArrayList<>();
@@ -291,7 +290,9 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		for (String beanName : candidateNames) {
 			BeanDefinition beanDef = registry.getBeanDefinition(beanName);
 			/**
-			 * 如果属性已经设置了，说明该类已经判断了加没加@Configuration注解啦
+			 * 如果属性已经设置了，说明该类已经判断了加没加@Configuration注解啦，
+			 * 就不需要走下面的elseif再去判断是否加@Configuration注解
+			 *
 			 */
 			if (ConfigurationClassUtils.isFullConfigurationClass(beanDef) ||
 					ConfigurationClassUtils.isLiteConfigurationClass(beanDef)) {
@@ -312,6 +313,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			 * 就是我们在AppConfig中没有加@Configuration，而加了@Component等spring也会进行解析
 			 * 但是在里面的判断过程中，如果加了@Configuration就会设置一个属性为full,spring就会认为这个bean是全注解类。
 			 * 如果是非@Configuration注解，则会设置属性为lite,表示非全注解类
+			 *
 			 *
 			 */
 			else if (ConfigurationClassUtils.checkConfigurationClassCandidate(beanDef, this.metadataReaderFactory)) {
@@ -335,6 +337,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 
 		// Detect any custom bean name generation strategy supplied through the enclosing application context
 		SingletonBeanRegistry sbr = null;
+		// 看spring有没有提供bean生成器，不重要
 		if (registry instanceof SingletonBeanRegistry) {
 			sbr = (SingletonBeanRegistry) registry;
 			if (!this.localBeanNameGeneratorSet) {
@@ -354,14 +357,19 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		ConfigurationClassParser parser = new ConfigurationClassParser(
 				this.metadataReaderFactory, this.problemReporter, this.environment,
 				this.resourceLoader, this.componentScanBeanNameGenerator, registry);
-		//利用set去重
+		//利用set去重，怕里面的配置类重复
 		Set<BeanDefinitionHolder> candidates = new LinkedHashSet<>(configCandidates);
+		//可能会在扫描的配置类中又有@configuration注解的配置类，需要再此加入到candidate中
 		Set<ConfigurationClass> alreadyParsed = new HashSet<>(configCandidates.size());
+		// 在这一步，candidates中应该只有AppConfig满足，因为只有它有注解，满足上面的条件
 		do {
-			//解析注解类
+			//解析注解类, 然后在下面加入到bdMap中，这个应该就是spring工厂最重要的逻辑啦
 			parser.parse(candidates);
 			parser.validate();
 
+			/**
+			 * @Import得到的都放入到configClasses中的啦
+			 */
 			Set<ConfigurationClass> configClasses = new LinkedHashSet<>(parser.getConfigurationClasses());
 			configClasses.removeAll(alreadyParsed);
 
@@ -372,6 +380,16 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 						this.importBeanNameGenerator, parser.getImportRegistry());
 			}
 			/**
+			 * ===========================================
+			 * 这里会处理，@Import,@bean等情况
+			 * spring扫描类的情况
+			 * 普通类   扫描完成之后注册
+			 * importSelector 先放入configurationClasses 然后通过loadBeanDefinitions注册
+			 * import xxxRegistar 放入importBeanDefinitionRegistrars 然后注册
+			 * import普通类  先放入configurationClassess,然后通过loadBeanDefinitions注册
+			 * ===========================================
+			 *
+			 *
 			 * 在这里是因为扫描出来的bean当中包含了特殊类
 			 * 比如ImportBeanDefinitionRegistrar也是这个方法中处理的
 			 * 但并不是包含在configClasses中

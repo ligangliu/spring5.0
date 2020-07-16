@@ -531,8 +531,10 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 
 			// Prepare the bean factory for use in this context.
 			/**
-			 * 准备工厂
-			 * 如其中有一步就是添加ApplicationContextAwareProcessor的db
+			 * 准备工厂，
+			 * 1) 添加了一个类加载器
+			 * 2) 添加了一个bean表达式
+			 * 2) 添加了后置处理器，其中有一个很牛逼的后置处理器就是ApplicationContextAwareProcessor
 			 */
 			prepareBeanFactory(beanFactory);
 
@@ -609,6 +611,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 				// Instantiate all remaining (non-lazy-init) singletons.
 				/**
 				 * 到上面为止，我们的bean并没有被实例化，下面的这个方法才是真正的实例化
+				 * 这里的后置处理器会进行处理
 				 *
 				 */
 				finishBeanFactoryInitialization(beanFactory);
@@ -724,9 +727,16 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		 * 在new AnnotationConfigApplicationContext()构造的时候也添加了6个spring内置的后置处理器。
 		 * 这种spring自己默认的后置处理器，并没有@Component注解，扫描不到，只能通过spring自己添加
 		 * ApplicationContextAwareProcessor：用来处理实现了Aware接口的bean注入相应的内容
-		 * 如实现了ApplicationContextAware该接口的bean，就会注入ApplicationContext
+		 * 如实现了ApplicationContextAware该接口的bean，就会注入ApplicationContext。
+		 *
+		 *
+		 * 到了这里，beanDefinitionMap还是7个(6个内置的，1个是AppConfig),
+		 * 但是ApplicationContextAwareProcessor并没有放入到beanDefinitionMap中，
+		 * 而是在beanPostProcessor中，且这里面只有一个，就是刚刚添加进去的，
+		 * 对于上面的spring内置的6个目前还只是beanDefition而已
 		 */
 		beanFactory.addBeanPostProcessor(new ApplicationContextAwareProcessor(this));
+
 		beanFactory.ignoreDependencyInterface(EnvironmentAware.class);
 		beanFactory.ignoreDependencyInterface(EmbeddedValueResolverAware.class);
 		beanFactory.ignoreDependencyInterface(ResourceLoaderAware.class);
@@ -790,6 +800,10 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	 * <p>Must be called before singleton instantiation.
 	 */
 	protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory beanFactory) {
+		/**
+		 * BeanFactoryPostProcessor
+		 *
+		 */
 		//这里需要注意的是：getBeanFactoryPostProcessors()拿到的是自定义的BeanFactoryPostProcessor
 		//怎么样是自定义的呢？就是没加@Component注解是被扫描进来的，在这里还获取不到。
 		//应该在context.addBeanFactoryPostProcessor()添加到list中的，这样的自定义的BeanFactoryPostProcessor才能获取到。
@@ -974,7 +988,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 
 		// Instantiate all remaining (non-lazy-init) singletons.
 		/**
-		 * 实例化单列对象之前
+		 * 实例化所有的单列且非懒加载对象之前要做的一些事情
 		 */
 		beanFactory.preInstantiateSingletons();
 	}

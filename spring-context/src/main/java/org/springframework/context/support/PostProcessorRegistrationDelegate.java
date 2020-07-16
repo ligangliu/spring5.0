@@ -75,7 +75,9 @@ final class PostProcessorRegistrationDelegate {
 				if (postProcessor instanceof BeanDefinitionRegistryPostProcessor) {
 					BeanDefinitionRegistryPostProcessor registryProcessor =
 							(BeanDefinitionRegistryPostProcessor) postProcessor;
+					// 这个是spring自己实现的，它只不过拓展了，多实现了一个postProcessBeanDefinitionRegistry方法
 					registryProcessor.postProcessBeanDefinitionRegistry(registry);
+					//执行完上面的方法，也是放入了registryProcessors中的列表中的
 					registryProcessors.add(registryProcessor);
 				}
 				else {
@@ -88,7 +90,7 @@ final class PostProcessorRegistrationDelegate {
 			// Separate between BeanDefinitionRegistryPostProcessors that implement
 			// PriorityOrdered, Ordered, and the rest.
 			/**
-			 * currentRegistryProcessors 放的是spring内部实现了BeanDefinitionRegistryPostProcessor接口的
+			 *  放的是spring内部实现了BeanDefinitionRegistryPostProcessor接口的
 			 * registryProcessors 放的是我们自己实现了BeanDefinitionRegistryPostProcessor接口的
 			 */
 			List<BeanDefinitionRegistryPostProcessor> currentRegistryProcessors = new ArrayList<>();
@@ -101,27 +103,37 @@ final class PostProcessorRegistrationDelegate {
 			 * 如获取到了： ConfigurationClassPostProcessor
 			 */
 			String[] postProcessorNames =
+					//BeanDefinitionRegistryPostProcessor是spring内置的工厂后置处理器
+					//讲道理，如果一切按默认的话，这里应该是可以得到ConfigurationClassPostProcessor
 					beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
 			for (String ppName : postProcessorNames) {
 				if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
 					//获取到了spring内置的BeanFactoryPostProcessor的ConfigurationClassPostProcessor
 					//将其添加到currentRegistryProcessors中list中
 					//看到这里没有，是通过getBean获取的，所以说这里的BeanFactoryPostProcessor是初始化好的
+					// 通过getBean->将该类的beanDefinition信息初始化出来
 					currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
 					processedBeans.add(ppName);
 				}
 			}
 			sortPostProcessors(currentRegistryProcessors, beanFactory);
+			//registryProcessors 中的所有的接口都是调用BeanFactoryPostProcessor接口下的 postProcessBeanFactory方法
 			registryProcessors.addAll(currentRegistryProcessors);
 			/**
 			 * 循环所有的Spring内置的BeanDefinitionRegistryPostProcessor
 			 * 其实就是只有一个ConfigurationClassPostProcessor
 			 * 通过ConfigurationClassPostProcessor扫描所有的bean信息
+			 *
+			 * 所以说这个方法非常重要！！！！！！！！
 			 */
 			invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
 			currentRegistryProcessors.clear();
 
 			// Next, invoke the BeanDefinitionRegistryPostProcessors that implement Ordered.
+			/**
+			 * 这里为啥来一遍？？？
+			 * 是因为可能在配置类中扫描得到了我们代码是是是实现了BeanDefinitionRegistryPostProcessor接口
+			 */
 			postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
 			for (String ppName : postProcessorNames) {
 				if (!processedBeans.contains(ppName) && beanFactory.isTypeMatch(ppName, Ordered.class)) {
@@ -131,12 +143,14 @@ final class PostProcessorRegistrationDelegate {
 			}
 			sortPostProcessors(currentRegistryProcessors, beanFactory);
 			registryProcessors.addAll(currentRegistryProcessors);
-			/**
-			 * 经过这个方法调用后，我们所有的beanDefiniton都已经被注册
-			 */
+
 			invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
 			currentRegistryProcessors.clear();
 
+			/**
+			 * 一直递归处理，因为有可能，配置类 中又有配置类
+			 * 然后 配置类中配置类，再有配置类呢？
+			 */
 			// Finally, invoke all other BeanDefinitionRegistryPostProcessors until no further ones appear.
 			boolean reiterate = true;
 			while (reiterate) {
@@ -155,18 +169,24 @@ final class PostProcessorRegistrationDelegate {
 				currentRegistryProcessors.clear();
 			}
 
+			/**
+			 * 当while循环执行完成之后我们所有的beanDefiniton(包含@Bean注解)都已经被添加到beanDefinitionMap中啦
+			 */
+
 			// Now, invoke the postProcessBeanFactory callback of all processors handled so far.
 			/**
-			 * 执行BeanFactoryPostProcessor的回调，前面不是嘛？
+			 * 执行BeanFactoryPostProcessor的回调
 			 * 前面执行的时BeanFactoryPostProcessor的子类BeanDefinitionRegistryPostProcessor的回调。
 			 * 前面执行的回调是扫描所有的配置类，加入到bd中
-			 * 这里执行的是BeanFactoryPostProcessor的回调。
+			 * 这里执行的是BeanFactoryPostProcessor的回调(AOP实现的基础)。
 			 * registryProcessors中存放的实现了BeanDefinitionRegistryPostProcessor
 			 * 而BeanDefinitionRegistryPostProcessor又是BeanFactoryPostProcessor的子类，所以也会执行
+			 *
+			 * registryProcessors：主要是ConfigurationClassPostProcessor，它里面的方法会去为@Configuration生成代理
 			 */
 			invokeBeanFactoryPostProcessors(registryProcessors, beanFactory);
 			/**
-			 * 执行的是我们自定义的BeanFactoryPostProcessor
+			 * 执行的是我们自定义的BeanFactoryPostProcessor(是通过context.register注册进去的)
 			 */
 			invokeBeanFactoryPostProcessors(regularPostProcessors, beanFactory);
 		}
@@ -228,6 +248,11 @@ final class PostProcessorRegistrationDelegate {
 		beanFactory.clearMetadataCache();
 	}
 
+	/**
+	 * beanDefinitionMap中有一部分，实现了后置处理器
+	 * beanPostProcessors 列表中有一个直接使用add(new XXPostProcessor)
+	 * 然后在这个方法里面又添加了几个后置处理器
+	 */
 	public static void registerBeanPostProcessors(
 			ConfigurableListableBeanFactory beanFactory, AbstractApplicationContext applicationContext) {
 		/**

@@ -279,6 +279,8 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
 			 * 利用ASM(一个开源技术)读取class文件
 			 * 所有扫描出来的都是ScannedGenericBeanDefinition
 			 * ScannedGenericBeanDefinition extends GenericBeanDefinition implements AnnotatedBeanDefinition
+			 * 跟进去，看注释，有一个mybatis整合spring，我以前一直没有想通的问题的解释，就是@MapperScan之后，
+			 * 我们发现UserMapper中根本不需要写接口，以前百思不得其解，跟进去就能发现spring的拓展牛逼的地方
 			 */
 			Set<BeanDefinition> candidates = findCandidateComponents(basePackage);
 			for (BeanDefinition candidate : candidates) {
@@ -293,11 +295,13 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
 					 * 则为他设置默认值，比如lazy,init destroy等
 					 * 因为@ComponentScan()下面有很多的类，先为所有的类设置一个全局默认值，
 					 * 在下面配了的话再进行修改，没配就用默认值既可。但是此时没有这些类的bd.
-					 * 因此先生成一个全局的变量，在后面的时候具体扫描的时候循环的时候再设置。
+					 * 因此先生成一个全局的变量(因为所有的bd肯定是继承AbstractBeanDefinition的，
+					 * 在后面的时候具体扫描的时候循环的时候再设置。
 					 */
 					postProcessBeanDefinition((AbstractBeanDefinition) candidate, beanName);
 				}
 				if (candidate instanceof AnnotatedBeanDefinition) {
+					//解析bd信息,一些lazy等信息
 					AnnotationConfigUtils.processCommonDefinitionAnnotations((AnnotatedBeanDefinition) candidate);
 				}
 				if (checkCandidate(beanName, candidate)) {
@@ -305,9 +309,7 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
 					definitionHolder =
 							AnnotationConfigUtils.applyScopedProxyMode(scopeMetadata, definitionHolder, this.registry);
 					beanDefinitions.add(definitionHolder);
-					/**
-					 * 将bd放入到map中
-					 */
+					// 将每一个扫描得到的beanDefinition放到bdMap中
 					registerBeanDefinition(definitionHolder, this.registry);
 				}
 			}

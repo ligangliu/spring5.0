@@ -280,6 +280,11 @@ public class DispatcherServlet extends FrameworkServlet {
 		// This is currently strictly internal and not meant to be customized
 		// by application developers.
 		try {
+			/**
+			 * DispatcherServlet.properties 这个配置文件是sping-webmvc中配置的文件
+			 * springmvn会有一个initStrategies，这里面配置了如HandlerMapping，HandlerAdapter等。。
+			 * 在springmvc初始化的时候，会调用到defaultStrategies。
+			 */
 			ClassPathResource resource = new ClassPathResource(DEFAULT_STRATEGIES_PATH, DispatcherServlet.class);
 			defaultStrategies = PropertiesLoaderUtils.loadProperties(resource);
 		}
@@ -495,13 +500,16 @@ public class DispatcherServlet extends FrameworkServlet {
 	 * <p>May be overridden in subclasses in order to initialize further strategy objects.
 	 */
 	protected void initStrategies(ApplicationContext context) {
+		// 上传下载文件的
 		initMultipartResolver(context);
+		// 国际化的
 		initLocaleResolver(context);
+		// 基本上没用过
 		initThemeResolver(context);
-		/**
-		 * 初始化所有的HandlerMapping
-		 */
+		// 初始化所有的HandlerMapping
 		initHandlerMappings(context);
+		// 上一步得到HandlerMapping之后，就是通过request找到对应的Controller之后，
+		// 如果调用就需要映射到对应的HandlerAdapter
 		initHandlerAdapters(context);
 		initHandlerExceptionResolvers(context);
 		initRequestToViewNameTranslator(context);
@@ -586,7 +594,30 @@ public class DispatcherServlet extends FrameworkServlet {
 		if (this.detectAllHandlerMappings) {
 			// Find all HandlerMappings in the ApplicationContext, including ancestor contexts.
 			/**
-			 * 从spring ioc中获取实现HandlerMapping的接口
+			 * 从spring ioc中获取实现HandlerMapping的接口(具体是从singletonObjects中获取)
+			 * ======================================================================================
+			 * 注意：这里是从spring 容器中找的是HandlerMapping哈，并不是Controller啦
+			 * 具体的Controller是再BeanNameUrlHandlerMapping中去初始化的，这一点一直是我搞错了的点。
+			 * 具体里面的handlerMapping中去维护自己所对应的关系呗，形成一个map
+			 * ======================================================================================
+			 *
+			 * 但是这里我好奇怪几个点，
+			 * 1） 为什么spring会扫描出5个？？？我们什么时候给spring注册进去的。。。。？
+			 * 讲道理，这里是如果没有配置的话，这里是null,我一开始debug发现有5个，是因为我在AppConfig中extends WebMvcConfigurationSupport
+			 * 再WebMvcConfigurationSupport中有很多的@Bean,里面帮我们@Bean了HanderMapping，
+			 * 如果这里找不到，就会使用到下面的配置文件中去加载
+			 *
+			 * 所以这里还会有一个问题，如果没有继承WebMvcConfigurationSupport，但是我们@Compoent一个HandlerMapping
+			 * 的话，那么就不会走到配置文件加载哪里哦，所以如果要自定义HandlerMapping的话，那么就需要自己去处理所有的哦
+			 *
+			 * 2） HandlerMapping中如何维护Controller关系的？？？？？
+			 * 这是因为HandlerMapping肯定实现了spring的某个回调的接口，在这里是实现了spring的InitializingBean接口
+			 * 然后在里面的afterPropertiesSet()会去初始化找到所有的Controller关系
+			 * protected boolean isHandler(Class<?> beanType) {
+			 * 		return (AnnotatedElementUtils.hasAnnotation(beanType, Controller.class) ||
+			 * 				AnnotatedElementUtils.hasAnnotation(beanType, RequestMapping.class));
+			 * }
+			 *
 			 */
 			Map<String, HandlerMapping> matchingBeans =
 					BeanFactoryUtils.beansOfTypeIncludingAncestors(context, HandlerMapping.class, true, false);
@@ -599,7 +630,7 @@ public class DispatcherServlet extends FrameworkServlet {
 		else {
 			try {
 				/**
-				 * 获取指定的beanName的HandlerMapping
+				 * 获取指定的beanName的HandlerMapping，讲道理这里应该是也拿不到的
 				 */
 				HandlerMapping hm = context.getBean(HANDLER_MAPPING_BEAN_NAME, HandlerMapping.class);
 				this.handlerMappings = Collections.singletonList(hm);
@@ -614,7 +645,7 @@ public class DispatcherServlet extends FrameworkServlet {
 		if (this.handlerMappings == null) {
 			/**
 			 * 从前面加载配置文件种获取HandlerMapping的实现类
-			 * 并在里面通过Class.forName加载创建
+			 * 并在里面通过Class.forName加载创建，并且放入到spring容器中去啦
 			 */
 			this.handlerMappings = getDefaultStrategies(context, HandlerMapping.class);
 			if (logger.isDebugEnabled()) {
@@ -946,6 +977,7 @@ public class DispatcherServlet extends FrameworkServlet {
 		}
 
 		try {
+			// 看到没，这里是被分发的request,去find Controller方法
 			doDispatch(request, response);
 		}
 		finally {
@@ -969,6 +1001,10 @@ public class DispatcherServlet extends FrameworkServlet {
 	 * @param response current HTTP response
 	 * @throws Exception in case of any kind of processing failure
 	 */
+	/**
+	 * 请求分发，拦截所有的请求
+	 * request -> controller的过程
+	 */
 	protected void doDispatch(HttpServletRequest request, HttpServletResponse response) throws Exception {
 		HttpServletRequest processedRequest = request;
 		HandlerExecutionChain mappedHandler = null;
@@ -981,10 +1017,26 @@ public class DispatcherServlet extends FrameworkServlet {
 			Exception dispatchException = null;
 
 			try {
+				// 检查文件上传，里面就是利用HTTP规范，定义如果请求携带二进制数据，
+				// 需要在请求头上申明的，只需要检验一下就好
 				processedRequest = checkMultipart(request);
 				multipartRequestParsed = (processedRequest != request);
 
 				// Determine handler for the current request.
+				/**
+				 * 这个方法就比较重要
+				 * springmvc 找 Controller流程
+				 * 1) 扫描整个项目(Spring 已经做了) 定义一个Map集合
+				 * 2) 拿到所有加了@Controller注解的类
+				 * 3) 遍历 类所有的方法对象
+				 * 4) 判断方法是否加了RequestMapping注解
+				 * 5) 把@RequestMapping注解的value 作为map集合的key, value就是对应的方法对象，放入map集合
+				 * ==================================================
+				 * 以上都是启动之前就已经做好了的
+				 * 6) 根据发送的请求，拿到请求中的URI去mapping到对应的value
+				 * 7) 找到value,通过反射调用
+				 *
+				 */
 				mappedHandler = getHandler(processedRequest);
 				if (mappedHandler == null) {
 					noHandlerFound(processedRequest, response);
@@ -992,7 +1044,20 @@ public class DispatcherServlet extends FrameworkServlet {
 				}
 
 				// Determine handler adapter for the current request.
+				/**
+				 * 因为有多种方式注册Controller
+				 * 适配器来适配以何种方式来调用方法，因为定义Controller方式有多种，
+				 * 两种类型：BeanName类型和@Controller类型
+				 * 三种实现 实现HttpRequestHandler 或 Controller 以及加上@Controller注解
+				 * 通过适配器来确定如何调用方法
+				 *
+				 * 如果mappedHandler.getHandler() 是一个bean, 返回的是一个对象
+				 * 如果mappedHandler.getHandler() 是一个bean, 返回的是一个Method
+				 *
+				 */
 				HandlerAdapter ha = getHandlerAdapter(mappedHandler.getHandler());
+
+				// 到了这一步，spring才确定要如何反射调用对应的方法啦
 
 				// Process last-modified header, if supported by the handler.
 				String method = request.getMethod();
@@ -1007,6 +1072,9 @@ public class DispatcherServlet extends FrameworkServlet {
 					}
 				}
 
+				/**
+				 * spring的前置拦截处理
+				 */
 				if (!mappedHandler.applyPreHandle(processedRequest, response)) {
 					return;
 				}
@@ -1019,6 +1087,9 @@ public class DispatcherServlet extends FrameworkServlet {
 				}
 
 				applyDefaultViewName(processedRequest, mv);
+				/**
+				 * spring的后置拦截处理
+				 */
 				mappedHandler.applyPostHandle(processedRequest, response, mv);
 			}
 			catch (Exception ex) {
@@ -1203,6 +1274,18 @@ public class DispatcherServlet extends FrameworkServlet {
 	 */
 	@Nullable
 	protected HandlerExecutionChain getHandler(HttpServletRequest request) throws Exception {
+		/**
+		 * Controller的表示类型有三种
+		 * 1) @Controller注解
+		 * 2) Controller1 implements Controller，加@Component("index1.do")注解
+		 * 3) Contoller2 implements HttpRequestHandler，加@Component("index2.do")注解
+		 * 2),3)基本没人使用吧。。。。
+		 *
+		 * 多以HandlerMapping是确定Handler类型 {
+		 *     1) method
+		 *     2) bean
+		 * }
+		 */
 		if (this.handlerMappings != null) {
 			for (HandlerMapping hm : this.handlerMappings) {
 				if (logger.isTraceEnabled()) {

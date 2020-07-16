@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
  * @Author liu
  * @Date 2019-10-18 16:23
  */
-@Component
+//@Component
 public class IndexDao {
 
 	public IndexDao() {
@@ -22,7 +22,4 @@ public class IndexDao {
 	public Person getPerson() {
 		return new Person();
 	}
-}
-class Person {
-
 }

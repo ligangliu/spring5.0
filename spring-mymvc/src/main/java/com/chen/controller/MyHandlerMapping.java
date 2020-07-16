@@ -10,7 +10,7 @@ import javax.servlet.http.HttpServletRequest;
  * @Author liu
  * @Date 2019-10-27 14:06
  */
-//@Component
+@Component
 public class MyHandlerMapping implements HandlerMapping {
 
 	@Override

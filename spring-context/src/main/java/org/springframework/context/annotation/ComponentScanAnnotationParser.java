@@ -72,8 +72,12 @@ class ComponentScanAnnotationParser {
 		this.registry = registry;
 	}
 
-
+	/**
+	 * 这个方法很重要呀，就是去扫描解析scan中的信息
+	 */
 	public Set<BeanDefinitionHolder> parse(AnnotationAttributes componentScan, final String declaringClass) {
+		// this.scanner = new ClassPathBeanDefinitionScanner(this); 是外面给程序员手动调用scan而用
+		// 而这里的扫描是重新new了一个扫描类
 		ClassPathBeanDefinitionScanner scanner = new ClassPathBeanDefinitionScanner(this.registry,
 				componentScan.getBoolean("useDefaultFilters"), this.environment, this.resourceLoader);
 		//beanName的生成器
@@ -93,10 +97,11 @@ class ComponentScanAnnotationParser {
 			scanner.setScopeMetadataResolver(BeanUtils.instantiateClass(resolverClass));
 		}
 
+		// 不知道干嘛的
 		scanner.setResourcePattern(componentScan.getString("resourcePattern"));
 
 		/**
-		 * 遍历当中的过滤
+		 * 遍历CommentScan当中需要过滤的东西
 		 */
 		for (AnnotationAttributes filter : componentScan.getAnnotationArray("includeFilters")) {
 			for (TypeFilter typeFilter : typeFiltersFor(filter)) {

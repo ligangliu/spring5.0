@@ -12,11 +12,12 @@ import javax.servlet.http.HttpServletResponse;
  * @Author liu
  * @Date 2019-10-27 10:06
  */
-@Component("/chen")
+@Component("/index1.do")
 public class Controller1 implements Controller {
 
 	@Override
 	public ModelAndView handleRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
+		System.out.println("index1.....");
 		return null;
 	}
 }

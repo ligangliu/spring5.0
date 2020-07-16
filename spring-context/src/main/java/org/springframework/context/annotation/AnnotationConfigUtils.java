@@ -160,7 +160,7 @@ public class AnnotationConfigUtils {
 		Set<BeanDefinitionHolder> beanDefs = new LinkedHashSet<>(8);
 
 		/**
-		 * 往spring的容器中注册一些spring的内置类
+		 * 往spring的容器中注册一些spring的内置类(都是RootBeanDefinition)
 		 * 在refresh()中的invokeBeanFactoryPostProcessors会通过判断该类是BeanDefinitionRegistryPostProcessor
 		 * 而获取到，然后调用它，会在spring的beanFactory初始化过程中去做一些事情。
 		 * 委托了多个实现了BeanDefinitionRegistryPostProcessor或者BeanFactoryProcessor
@@ -177,6 +177,11 @@ public class AnnotationConfigUtils {
 		 *
 		 */
 		if (!registry.containsBeanDefinition(CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+			//ConfigurationClassPostProcessor 是实现了BeanFactoryPostProcessor接口的
+			/**
+			 * 这个类是非常重要的。它的作用是非常大的
+			 * ConfigurationClassPostProcessor扫描所有的bean信息，将所有的bean信息放入我们的beanDefinitionMap中
+			 */
 			RootBeanDefinition def = new RootBeanDefinition(ConfigurationClassPostProcessor.class);
 			def.setSource(source);
 			beanDefs.add(registerPostProcessor(registry, def, CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME));
@@ -256,6 +261,9 @@ public class AnnotationConfigUtils {
 		processCommonDefinitionAnnotations(abd, abd.getMetadata());
 	}
 
+	/**
+	 * 处理我们的配置类的一下信息，如是否是lazy,DependOn等信息
+	 */
 	static void processCommonDefinitionAnnotations(AnnotatedBeanDefinition abd, AnnotatedTypeMetadata metadata) {
 		AnnotationAttributes lazy = attributesFor(metadata, Lazy.class);
 		if (lazy != null) {

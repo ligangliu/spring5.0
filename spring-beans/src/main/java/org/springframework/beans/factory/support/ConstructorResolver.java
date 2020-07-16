@@ -108,19 +108,33 @@ class ConstructorResolver {
 	 * or {@code null} if none (-> use constructor argument values from bean definition)
 	 * @return a BeanWrapper for the new instance
 	 */
+	/**
+	 * 这个方法很复杂。。。。
+	 * 看不太懂。。。。。
+	 */
 	public BeanWrapper autowireConstructor(String beanName, RootBeanDefinition mbd,
 			@Nullable Constructor<?>[] chosenCtors, @Nullable Object[] explicitArgs) {
 
+		// 实例一个BeanWrapperImpl对象，返回的就是一个BeanWrapper对象
+		// 里面就有一个warpperdObject对象
 		BeanWrapperImpl bw = new BeanWrapperImpl();
 		this.beanFactory.initBeanWrapper(bw);
 
 		/**
 		 * 需要确定使用那个构造方法，那些参数
+		 * constructorToUse 这个参数就是spring最后确定调用的构造方法
+		 * argsHolderToUse 是使用构造方法需要用到那些值
+		 *
+		 * 其实spring在这里主要就是需要确定
+		 * Constructor
+		 * ParamsType
+		 * ParamsValue
 		 */
 		Constructor<?> constructorToUse = null;
 		ArgumentsHolder argsHolderToUse = null;
 		Object[] argsToUse = null;
-
+		// 确定参数列表
+		// argsToUse可以有两种办法设置，1）通过beanDefinition设置 2）通过xml设置
 		if (explicitArgs != null) {
 			argsToUse = explicitArgs;
 		}
@@ -140,6 +154,7 @@ class ConstructorResolver {
 				}
 			}
 			if (argsToResolve != null) {
+				// 参数解析器，得到参数
 				argsToUse = resolvePreparedArguments(beanName, mbd, bw, constructorToUse, argsToResolve);
 			}
 		}
@@ -148,6 +163,8 @@ class ConstructorResolver {
 			// Need to resolve the constructor.
 			/**
 			 * 判断需不需要以构造方法进行自动注入
+			 *
+			 * 如果构造方法不为null,
 			 */
 			boolean autowiring = (chosenCtors != null ||
 					mbd.getResolvedAutowireMode() == AutowireCapableBeanFactory.AUTOWIRE_CONSTRUCTOR);

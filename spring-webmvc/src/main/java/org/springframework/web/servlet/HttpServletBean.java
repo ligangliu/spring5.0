@@ -144,6 +144,11 @@ public abstract class HttpServletBean extends HttpServlet implements Environment
 	 * @throws ServletException if bean properties are invalid (or required
 	 * properties are missing), or if subclass initialization fails.
 	 */
+	/**
+	 * tomcat.start()的时候，通过设置setLoadOnStartup(1);tomcat来调用该方法
+	 * 初始化，请求和Controller的映射关系
+	 * @throws ServletException
+	 */
 	@Override
 	public final void init() throws ServletException {
 		if (logger.isDebugEnabled()) {

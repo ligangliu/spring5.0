@@ -405,6 +405,11 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		return resolvedBeanNames;
 	}
 
+	/**
+	 * 这里会所有的beanDefinitionNames，然后一个一个遍历，然后通过beanName去一个一个拿到对应的bean,
+	 * 这里会去处理FactoryBean的情况，然后根据需要注入的type去一个一个的mapping，
+	 * 最后会返回对应type的baenDefinitionName
+	 */
 	private String[] doGetBeanNamesForType(ResolvableType type, boolean includeNonSingletons, boolean allowEagerInit) {
 		List<String> result = new ArrayList<>();
 
@@ -738,6 +743,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		for (String beanName : beanNames) {
 			/**
 			 * getMergedLocalBeanDefinition 应该是在xml中才用到
+			 * 先不管吧，现在基本上没有使用的地方啦
 			 */
 			RootBeanDefinition bd = getMergedLocalBeanDefinition(beanName);
 			//如果该类不是单列的，而且是单列的，并且不是懒加载的
@@ -769,6 +775,9 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		}
 
 		// Trigger post-initialization callback for all applicable beans...
+		/**
+		 * 调用一些回调方法
+		 */
 		for (String beanName : beanNames) {
 			Object singletonInstance = getSingleton(beanName);
 			if (singletonInstance instanceof SmartInitializingSingleton) {
@@ -1097,6 +1106,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 				return shortcut;
 			}
 
+			// 拿到依赖的类型,所以Autowired是默认根据类型来注入
 			Class<?> type = descriptor.getDependencyType();
 			Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
 			if (value != null) {
@@ -1116,6 +1126,8 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 				return multipleBeans;
 			}
 
+			// 这里拿到了依赖的类型，这里面是根据byType去mapping的，会遍历所有的beanDefinitionNames，
+			// 然后在这里面会去处理getObject的类型来
 			Map<String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
 			if (matchingBeans.isEmpty()) {
 				if (isRequired(descriptor)) {
@@ -1140,6 +1152,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 						return null;
 					}
 				}
+				// 如果找到的类型有多个的话，会根据byName直接去获取
 				instanceCandidate = matchingBeans.get(autowiredBeanName);
 			}
 			else {
@@ -1154,8 +1167,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			}
 			if (instanceCandidate instanceof Class) {
 				/**
-				 * 去获取依赖的属性值，用于注入
-				 * 接下来找的就是beanFactory.getBean(beanName)
+				 * 去获取依赖的属性值，里面就是return beanFactory.getBean(beanName);
 				 */
 				instanceCandidate = descriptor.resolveCandidate(autowiredBeanName, type, this);
 			}
@@ -1294,7 +1306,9 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	 */
 	protected Map<String, Object> findAutowireCandidates(
 			@Nullable String beanName, Class<?> requiredType, DependencyDescriptor descriptor) {
-
+		/**
+		 * 根据byType去找到可以注入的类型
+		 */
 		String[] candidateNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
 				this, requiredType, true, descriptor.isEager());
 		Map<String, Object> result = new LinkedHashMap<>(candidateNames.length);

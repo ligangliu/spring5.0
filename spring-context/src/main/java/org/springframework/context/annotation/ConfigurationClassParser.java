@@ -172,6 +172,8 @@ class ConfigurationClassParser {
 		for (BeanDefinitionHolder holder : configCandidates) {
 			BeanDefinition bd = holder.getBeanDefinition();
 			try {
+				// 这里是解析注解类的入口
+				// 讲道理这里一定是加了注解的
 				if (bd instanceof AnnotatedBeanDefinition) {
 					//解析注解对象 解析AppConfig
 					parse(((AnnotatedBeanDefinition) bd).getMetadata(), holder.getBeanName());
@@ -222,7 +224,9 @@ class ConfigurationClassParser {
 		return this.configurationClasses.keySet();
 	}
 
-
+	/**
+	 *
+	 */
 	protected void processConfigurationClass(ConfigurationClass configClass) throws IOException {
 		if (this.conditionEvaluator.shouldSkip(configClass.getMetadata(), ConfigurationPhase.PARSE_CONFIGURATION)) {
 			return;
@@ -248,7 +252,7 @@ class ConfigurationClassParser {
 		}
 
 		// Recursively process the configuration class and its superclass hierarchy.
-		//转换成一个SourceClass
+		//转换成一个SourceClass，就是类型封装一下，不重要
 		SourceClass sourceClass = asSourceClass(configClass);
 		do {
 			//解析配置类，在这里一般情况下是解析context.register(AppConfig.class);或
@@ -258,6 +262,7 @@ class ConfigurationClassParser {
 		}
 		while (sourceClass != null);
 
+		// 将配置类(@Configuration, @Component,@Import,@ImportResource)
 		this.configurationClasses.put(configClass, configClass);
 	}
 
@@ -274,12 +279,13 @@ class ConfigurationClassParser {
 			throws IOException {
 
 		// Recursively process any member (nested) classes first
-		//处理内部类
+		//处理内部类，一般不怎么会写内部类，先不管吧！
 		processMemberClasses(configClass, sourceClass);
 
 		// Process any @PropertySource annotations
 		/**
 		 * 处理@PropertySource注解
+		 * 这个注解就是处理一些属性注入
 		 */
 		for (AnnotationAttributes propertySource : AnnotationConfigUtils.attributesForRepeatable(
 				sourceClass.getMetadata(), PropertySources.class,
@@ -310,14 +316,22 @@ class ConfigurationClassParser {
 				 * this.scanner = new ClassPathBeanDefinitionScanner(this);
 				 * 这个scanner只是提供给程序员在外面调用的scan("")扫描包
 				 */
+				//scannedBeanDefinitions 就是通过AppConfig中所有配置的扫描得到的bd
+				// 下面的this.componentScanParser就会放入到bdMap中
 				Set<BeanDefinitionHolder> scannedBeanDefinitions =
 						this.componentScanParser.parse(componentScan, sourceClass.getMetadata().getClassName());
 				// Check the set of scanned definitions for any further config classes and parse recursively if needed
 				for (BeanDefinitionHolder holder : scannedBeanDefinitions) {
 					BeanDefinition bdCand = holder.getBeanDefinition().getOriginatingBeanDefinition();
+					// 不知道干啥的
 					if (bdCand == null) {
 						bdCand = holder.getBeanDefinition();
 					}
+					/**
+					 * 注意：下面的这个判断也是if 而不是else if哈
+					 * 对于@CompontScan中扫描得到的类如果是@Component,@ComponentScan,@Import,@ImportResource
+					 * 需要再进行解析一下
+					 */
 					if (ConfigurationClassUtils.checkConfigurationClassCandidate(bdCand, this.metadataReaderFactory)) {
 						parse(bdCand.getBeanClassName(), holder.getBeanName());
 					}
@@ -328,6 +342,7 @@ class ConfigurationClassParser {
 		// Process any @Import annotations
 		/**
 		 * 处理@Import
+		 *
 		 * @Import注解有好几种情况
 		 * 1.直接写一个自定义类
 		 * spring的动态AOP就是这么实现的，有一个后置处理器SpringAopXXX
@@ -338,6 +353,8 @@ class ConfigurationClassParser {
 		 *
 		 * 对于@Import注解是将其放入到this.configurationClasses.put(configClass, configClass);
 		 * 在后续进行注册至bd中
+		 *
+		 * getImports(sourceClass) 获得Import类
 		 */
 		processImports(configClass, sourceClass, getImports(sourceClass), true);
 
@@ -582,6 +599,7 @@ class ConfigurationClassParser {
 		}
 	}
 
+
 	private void processDeferredImportSelectors() {
 		List<DeferredImportSelectorHolder> deferredImports = this.deferredImportSelectors;
 		this.deferredImportSelectors = null;
@@ -684,6 +702,7 @@ class ConfigurationClassParser {
 						// process it as an @Configuration class
 						this.importStack.registerImport(
 								currentSourceClass.getMetadata(), candidate.getMetadata().getClassName());
+						// 递归组后走的都是这里，放入到configurationClasses中继续解析得到bd
 						processConfigurationClass(candidate.asConfigClass(configClass));
 					}
 				}

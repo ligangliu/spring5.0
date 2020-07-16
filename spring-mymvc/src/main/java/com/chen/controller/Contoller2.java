@@ -13,10 +13,10 @@ import java.io.IOException;
  * @Author liu
  * @Date 2019-10-27 10:18
  */
-@Component("/liu")
+@Component("/index2.do")
 public class Contoller2 implements HttpRequestHandler {
 	@Override
 	public void handleRequest(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-
+		System.out.println("index2......");
 	}
 }

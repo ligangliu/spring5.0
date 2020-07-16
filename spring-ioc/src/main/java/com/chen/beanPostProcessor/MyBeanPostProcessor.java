@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
  * @Author liu
  * @Date 2019-10-18 20:54
  */
-@Component
+//@Component
 public class MyBeanPostProcessor implements BeanPostProcessor {
 	@Override
 	public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {

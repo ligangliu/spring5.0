@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
  * @Author liu
  * @Date 2019-10-18 16:23
  */
-@Component
+@Component("indexDao2")
 public class IndexDao2 {
 
 	@Autowired

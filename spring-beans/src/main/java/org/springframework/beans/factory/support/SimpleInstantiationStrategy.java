@@ -76,7 +76,7 @@ public class SimpleInstantiationStrategy implements InstantiationStrategy {
 									(PrivilegedExceptionAction<Constructor<?>>) clazz::getDeclaredConstructor);
 						}
 						else {
-							//得到默认的构造方法
+							//得到默认的构造方法， constructorToUse就是表示spring使用那个构造方法创建我的实例
 							constructorToUse = clazz.getDeclaredConstructor();
 						}
 						//表示spring使用那个构造方法构造对象
@@ -87,6 +87,9 @@ public class SimpleInstantiationStrategy implements InstantiationStrategy {
 					}
 				}
 			}
+			/**
+			 * 底层就是调用ctor.newInstance(args)
+			 */
 			return BeanUtils.instantiateClass(constructorToUse);
 		}
 		else {

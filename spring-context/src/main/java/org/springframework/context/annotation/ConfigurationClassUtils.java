@@ -91,9 +91,12 @@ abstract class ConfigurationClassUtils {
 		 * 加了注解的是使用AnnotatedBeanDefinition表示的)
 		 * 然后再判断加了什么样的注解
 		 */
+		//讲道理 只有我们的AppConfig的配置类的bd信息才是AnnotatedBeanDefinition
+		//spring内置的那些后置处理器bd是RootBeanDefinition
 		if (beanDef instanceof AnnotatedBeanDefinition &&
 				className.equals(((AnnotatedBeanDefinition) beanDef).getMetadata().getClassName())) {
 			// Can reuse the pre-parsed metadata from the given BeanDefinition...
+			// 不同类型的bd从不同的地方去拿这些配置的元信息
 			metadata = ((AnnotatedBeanDefinition) beanDef).getMetadata();
 		}
 		else if (beanDef instanceof AbstractBeanDefinition && ((AbstractBeanDefinition) beanDef).hasBeanClass()) {
@@ -118,8 +121,15 @@ abstract class ConfigurationClassUtils {
 		if (isFullConfigurationCandidate(metadata)) {
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_FULL);
 		}
-		//在没有加@Configuration注解，的情况下，再去判断是否加了
+		//在没有加@Configuration注解，的情况下，再去判断是否加了,如果加了@Configuration注解，就不会走else if啦
 		//@Component,@ComponentScan,@Import,@ImportResource注解
+		/**
+		 * ====================================
+		 * 注意这里一开始一直想不通呀。。。。@Controller, @Service等注解的代码在哪里呀？？？
+		 * 这里意外发现，@Controller，@Service等注解里面点进去也是@Component呀，
+		 * 哎，一开始这里一直没想通，@Controller是如何被扫进去的呢。。。。
+		 * ====================================
+		 */
 		else if (isLiteConfigurationCandidate(metadata)) {
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_LITE);
 		}
@@ -173,6 +183,12 @@ abstract class ConfigurationClassUtils {
 		}
 
 		// Any of the typical annotations found?
+		/**
+		 * @Component
+		 * @ComponentScan
+		 * @Import
+		 * @ImportResource
+		 */
 		for (String indicator : candidateIndicators) {
 			if (metadata.isAnnotated(indicator)) {
 				return true;

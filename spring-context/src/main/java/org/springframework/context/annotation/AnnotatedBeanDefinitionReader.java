@@ -89,6 +89,10 @@ public class AnnotatedBeanDefinitionReader {
 		Assert.notNull(environment, "Environment must not be null");
 		this.registry = registry;
 		this.conditionEvaluator = new ConditionEvaluator(registry, environment, null);
+		/**
+		 * 注册一些springn内置的后置处理器
+		 * Register all relevant annotation post processors in the given registry
+		 */
 		AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
 	}
 
@@ -215,9 +219,19 @@ public class AnnotatedBeanDefinitionReader {
 	 * factory's {@link BeanDefinition}, e.g. setting a lazy-init or primary flag
 	 * @since 5.0
 	 */
+	/**
+	 这个类在AnnotationConfigApplicationContext()初始化的时候，已经被初始化啦的
+	 this.reader = new AnnotatedBeanDefinitionReader(this);
+	 该类的初始化的时候会通过AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
+	 注册很多的spring内置的后置处理器。
+	 而该方法会将注册类的beanDefinition放入的beanFactory中
+
+	 要想明白，这个方法不一定是非得注册的配置类，我们也可以通过context.register(IndexService.class);来注册IndexService类的
+
+	 */
 	<T> void doRegisterBean(Class<T> annotatedClass, @Nullable Supplier<T> instanceSupplier, @Nullable String name,
 			@Nullable Class<? extends Annotation>[] qualifiers, BeanDefinitionCustomizer... definitionCustomizers) {
-
+		//配置类肯定是注解类型的BeanDefinition类型的
 		AnnotatedGenericBeanDefinition abd = new AnnotatedGenericBeanDefinition(annotatedClass);
 		/**
 		 * 根据Conditional注解判断是否需要跳过
@@ -226,10 +240,11 @@ public class AnnotatedBeanDefinitionReader {
 		if (this.conditionEvaluator.shouldSkip(abd.getMetadata())) {
 			return;
 		}
-
+		//看不懂
 		abd.setInstanceSupplier(instanceSupplier);
 		/**
 		 * 得到类的作用域
+		 * 得到scopeName="singleton",scopeProxyMode="NO"(不知道干啥的)
 		 */
 		ScopeMetadata scopeMetadata = this.scopeMetadataResolver.resolveScopeMetadata(abd);
 		abd.setScope(scopeMetadata.getScopeName());
@@ -257,7 +272,7 @@ public class AnnotatedBeanDefinitionReader {
 				}
 			}
 		}
-		//处理自定义注解
+		//处理自定义注解，基本上很少使用到
 		for (BeanDefinitionCustomizer customizer : definitionCustomizers) {
 			customizer.customize(abd);
 		}
@@ -268,6 +283,7 @@ public class AnnotatedBeanDefinitionReader {
 		BeanDefinitionHolder definitionHolder = new BeanDefinitionHolder(abd, beanName);
 		/**
 		 * 需要结合web去理解
+		 * ScopedProxyMode？？？？？？？需要结合springmvc去理解
 		 */
 		definitionHolder = AnnotationConfigUtils.applyScopedProxyMode(scopeMetadata, definitionHolder, this.registry);
 		/**

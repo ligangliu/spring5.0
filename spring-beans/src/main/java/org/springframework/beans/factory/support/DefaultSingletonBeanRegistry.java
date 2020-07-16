@@ -151,7 +151,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 		Assert.notNull(singletonFactory, "Singleton factory must not be null");
 		synchronized (this.singletonObjects) {
 			/**
-			 * 当一个对象new出来之后(在没有执行populateBean()自动注入的函数之气那)
+			 * 当一个对象new出来之后(在没有执行populateBean()自动注入的函数之前)
 			 * 1.先存放在 singletonFactories.put()中放一份
 			 * 2.earlySingletonObjects.remove()
 			 * 3.registeredSingletons.add()
@@ -188,12 +188,22 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	@Nullable
 	protected Object getSingleton(String beanName, boolean allowEarlyReference) {
-
+		// singletonObjects 存放的可是实例化好的，包括属性注入了的
 		Object singletonObject = this.singletonObjects.get(beanName);
+		/**
+		 * 如依赖注入的时候，indexDao1 中依赖 indexDao2的时候，
+		 * 去为indexDao1寻找依赖indexDao2的时候，indexDao2中的属性依赖indexDao1,
+		 * 对indexDao2中的indexDao1进行属性注入的时候
+		 * 此时对于indexDao1而言
+		 *  this.singletonObjects.get(beanName) == null的，这是因为singletonObjects是完全已经创建好的，并且populate啦的
+		 * isSingletonCurrentlyInCreation(beanName)应该是返回true的
+		 */
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
 			synchronized (this.singletonObjects) {
+				// 这里是从earlySingletonObjects.get(beanName);中获取的哦
 				singletonObject = this.earlySingletonObjects.get(beanName);
 				if (singletonObject == null && allowEarlyReference) {
+					// singletonFactories 应该放的就是还没有被属性注入的
 					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
 					/**
 					 * 完成了依赖注入
@@ -203,11 +213,32 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					 * 注意：存在里面的对象没有被填充属性
 					 *
 					 * 那么earlySingletonObjects到底有啥作用呢？？？
-					 * beanFactory.isTypeMatch(autowiredBeanName, field.getType()
-					 * 这是因为在拿出来，之后并不是立马去set,而是去匹配，避免这中间过程
-					 * 发生变化，也就是A中有B的引用，然后B中对于A的引用缺变成了另一个
+					 * 主要是解决性能问题，防止重复创建。为什么呢？
+					 * 比如 A 中注入 B，B 中依赖A,  C 也注入 B, B 也依赖C。
+					 *
+					 * 这是因为singletonFactory.getObject(); 这个过程可能是一个比较复杂的过程，
+					 * 然后我只需要创建第一次的时候，放入到earlySingletonObjects进去就好，
+					 * 并且防止了重复创建。
+					 *
 					 */
 					if (singletonFactory != null) {
+						/**
+						 * 这里千万要想清楚，在这里singletonFactory是
+						 * org.springframework.beans.factory.support.DefaultSingletonBeanRegistry#addSingletonFactory(java.lang.String, org.springframework.beans.factory.ObjectFactory)
+						 * 中的() -> getEarlyBeanReference(beanName, mbd, bean)
+						 * 一开始我一直想的是完成后续所有的,就会进入死循环，比如 a->b  b->a;
+						 * b注入a的时候，肯定是会走到这里，然后我想的a还在等b创建完呢？那么这里getObject不又调到a那边去了嘛？
+						 * 这样的话不就进入了一个死循环了。。。。
+						 * 其实不这里放入的singletonFactory并不是那个，而是() -> getEarlyBeanReference(beanName, mbd, bean)
+						 * 其中在getEarlyBeanReference中，会执行一些后置处理器，为什么呢？
+						 * 1，这里为什么在singletonFactories放入的是singletonFactory呢？而不是直接的object呢？
+						 * 这是因为 比如，对a封装了aop的，那么在b中对a注入的时候，
+						 * 如果安装 find bd -> new -> populate - init 生命周期的其它方法 - aop
+						 * 那么在b中populate a的时候，这个过程是从a 中注入 b走过来的，所以a 并没有执行aop的过程。
+						 * 如果对于singletonFactories直接放的是一个object的话，那么就没法继续执行aop啦，那么b中注入的a不就错了嘛？
+						 * 所以在这里我们通过singletonFactory.getObject();的后置处理器去提前执行aop操作
+						 *
+						 */
 						singletonObject = singletonFactory.getObject();
 						this.earlySingletonObjects.put(beanName, singletonObject);
 						this.singletonFactories.remove(beanName);
@@ -240,7 +271,8 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					logger.debug("Creating shared instance of singleton bean '" + beanName + "'");
 				}
 				/**
-				 * 往set中singletonsCurrentlyInCreation添加beanName，表示该bean正在创建中
+				 * 往set中singletonsCurrentlyInCreation添加beanName，表示该bean正在创建中,
+				 * 在循环依赖的时候，需要根据这个条件是否从三级缓存中拿
 				 */
 				beforeSingletonCreation(beanName);
 				boolean newSingleton = false;
@@ -249,7 +281,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					this.suppressedExceptions = new LinkedHashSet<>();
 				}
 				try {
-					//getObject()中创建
+					//getObject()中创建，就是传进来的labda表达式 return createBean(beanName, mbd, args);
 					singletonObject = singletonFactory.getObject();
 					newSingleton = true;
 				}
@@ -276,6 +308,9 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					afterSingletonCreation(beanName);
 				}
 				if (newSingleton) {
+					/**
+					 * 创建完了，就添加到singletonObjects中
+					 */
 					addSingleton(beanName, singletonObject);
 				}
 			}

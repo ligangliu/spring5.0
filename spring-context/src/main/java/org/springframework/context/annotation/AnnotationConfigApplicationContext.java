@@ -63,6 +63,8 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	 */
 	public AnnotationConfigApplicationContext() {
 		/**
+		 * 这行代码很重要----会注册很多的内置后置处理器
+		 *
 		 * 创建一个读取注解的Bean定义读取器
 		 * 什么是bean定义？BeanDefinition：描述一个spring的bean
 		 * 所以顾名思义 AnnotatedBeanDefinition 是加了注解的bean。
@@ -98,6 +100,7 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	}
 
 	/**
+	 * 把Spring所有的前提环境准备好
 	 * Create a new AnnotationConfigApplicationContext, deriving bean definitions
 	 * from the given annotated classes and automatically refreshing the context.
 	 * @param annotatedClasses one or more annotated classes,
@@ -107,8 +110,13 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 		//这里由于他有父类，因此会先调用父类构造方法，然后再调用自己的构造方法
 		//在自己构造方法中初始化一个读取器和扫描器
 		this();
-		//annotatedClasses 就是我们的配置类
+		//执行完this()之后，如果代码是常规的代码的话，beanFactory中的beanDefinitionMap中的size=6,
+		// 应该就是spring的那些内置的后置处理器
+
+		//annotatedClasses 就是我们的配置类，执行完之后，就是将配置类的beanDefinition放入到beanDefinitionMap中啦
 		register(annotatedClasses);
+
+		//在refresh()之前，讲道理应该是把所有的spring内置的后置处理器和AppConfig的BeanDefinition注册进了容器内啦
 		refresh();
 	}
 

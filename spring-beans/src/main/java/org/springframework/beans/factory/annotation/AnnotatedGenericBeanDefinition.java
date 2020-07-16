@@ -55,6 +55,7 @@ public class AnnotatedGenericBeanDefinition extends GenericBeanDefinition implem
 	 */
 	public AnnotatedGenericBeanDefinition(Class<?> beanClass) {
 		setBeanClass(beanClass);
+		//得到注解的信息 如：@Configuration @ComponentScan("com.chen")
 		this.metadata = new StandardAnnotationMetadata(beanClass, true);
 	}
 

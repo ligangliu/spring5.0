@@ -499,6 +499,7 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 		long startTime = System.currentTimeMillis();
 
 		try {
+			// 这里会去refresh spring容器
 			this.webApplicationContext = initWebApplicationContext();
 			initFrameworkServlet();
 		}
@@ -567,6 +568,11 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 			// support or the context injected at construction time had already been
 			// refreshed -> trigger initial onRefresh manually here.
 			synchronized (this.onRefreshMonitor) {
+				/**
+				 * =============================
+				 * 这里会去找@Controller的这些情况，维护号map，供后续HandlerMapping去find
+				 * =============================
+				 */
 				onRefresh(wac);
 			}
 		}
@@ -679,6 +685,7 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 
 		postProcessWebApplicationContext(wac);
 		applyInitializers(wac);
+		// 这里调用了refresh()啦
 		wac.refresh();
 	}
 

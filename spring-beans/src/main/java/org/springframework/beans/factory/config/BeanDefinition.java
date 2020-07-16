@@ -22,7 +22,8 @@ import org.springframework.core.AttributeAccessor;
 import org.springframework.lang.Nullable;
 
 /**
- * 用来描述spring 中的bean
+ 用来描述spring 中的bean(有点类似于java描述类的Class)： 维护的是spring管理的bean的各种属性信息.
+ 
  * A BeanDefinition describes a bean instance, which has property values,
  * constructor argument values, and further information supplied by
  * concrete implementations.

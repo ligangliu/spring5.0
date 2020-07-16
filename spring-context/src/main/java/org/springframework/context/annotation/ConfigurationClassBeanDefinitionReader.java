@@ -134,19 +134,22 @@ class ConfigurationClassBeanDefinitionReader {
 			this.importRegistry.removeImportingClass(configClass.getMetadata().getClassName());
 			return;
 		}
-		//如果一个类是被import的，会被spring标注
+		//如果一个类是被import的，会被spring标注，在这里完成注册的
 		if (configClass.isImported()) {
 			registerBeanDefinitionForImportedConfigurationClass(configClass);
 		}
 		/**
-		 * 处理AppConfig中的@Bean
+		 * 处理bd中的@Bean，
+		 * 但是这里虽然加入到bdMap中，但是里面的value的class[null](@Component的bdMap中的value是有class这个信息的)，
+		 * 最后具体产生的那个对象，应该是在getBean的时候做的处理（因为再ConfigurationClassPostProcessor中
+		 * 的postProcessBeanFactory方法中会为@Configuration生成代理等方法，避免@Bean中调用@Bean方法）
 		 */
 		for (BeanMethod beanMethod : configClass.getBeanMethods()) {
 			loadBeanDefinitionsForBeanMethod(beanMethod);
 		}
 		//注册xml
 		loadBeanDefinitionsFromImportedResources(configClass.getImportedResources());
-		//注册registrar
+		//注册registrarStrars
 		loadBeanDefinitionsFromRegistrars(configClass.getImportBeanDefinitionRegistrars());
 	}
 
@@ -175,6 +178,9 @@ class ConfigurationClassBeanDefinitionReader {
 	/**
 	 * Read the given {@link BeanMethod}, registering bean definitions
 	 * with the BeanDefinitionRegistry based on its contents.
+	 */
+	/**
+	 * 这个方法是用来注册配置类中的@Bean
 	 */
 	private void loadBeanDefinitionsForBeanMethod(BeanMethod beanMethod) {
 		ConfigurationClass configClass = beanMethod.getConfigurationClass();
@@ -218,6 +224,15 @@ class ConfigurationClassBeanDefinitionReader {
 
 		/**
 		 * 注意这里处理静态方法和非静态方法是不同的处理
+		 *
+		 * 在bean的实例化的时候 ，会这么处理，
+		 * 在org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory
+		 * #createBeanInstance(java.lang.String, org.springframework.beans.
+		 * factory.support.RootBeanDefinition, java.lang.Object[])中会处理
+		 *
+		 * if (mbd.getFactoryMethodName() != null) {
+		 * 		return instantiateUsingFactoryMethod(beanName, mbd, args);
+		 *  }
 		 */
 		if (metadata.isStatic()) {
 			// static @Bean method
