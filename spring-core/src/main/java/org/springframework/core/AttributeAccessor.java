@@ -25,6 +25,11 @@ import org.springframework.lang.Nullable;
  * @author Rob Harrop
  * @since 2.0
  */
+
+/**
+ * 提供一些额外的bd信息，在AbstractBeanDefinition中实现的
+ * 比如说对于@Configuration注解，就有一个属性表示该配置类是否是full或lite的
+ */
 public interface AttributeAccessor {
 
 	/**

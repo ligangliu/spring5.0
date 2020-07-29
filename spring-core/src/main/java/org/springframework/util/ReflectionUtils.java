@@ -364,6 +364,7 @@ public abstract class ReflectionUtils {
 	 * @see #doWithMethods
 	 */
 	public static void doWithLocalMethods(Class<?> clazz, MethodCallback mc) {
+		// 讲道理getDeclaredMethods 找不到构造方法把。。。，构造方法不是在前一步就已经执行完了的
 		Method[] methods = getDeclaredMethods(clazz);
 		for (Method method : methods) {
 			try {

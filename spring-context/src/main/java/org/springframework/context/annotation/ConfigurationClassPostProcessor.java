@@ -220,6 +220,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 	@Override
 	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) {
 		int registryId = System.identityHashCode(registry);
+		// 这里再次check一下是否重复执行，讲道理前面以前做了校验的，讲道理不会有的
 		if (this.registriesPostProcessed.contains(registryId)) {
 			throw new IllegalStateException(
 					"postProcessBeanDefinitionRegistry already called on this post-processor against " + registry);
@@ -228,6 +229,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			throw new IllegalStateException(
 					"postProcessBeanFactory already called on this post-processor against " + registry);
 		}
+		// 添加到已经处理的后置处理器中
 		this.registriesPostProcessed.add(registryId);
 
 		processConfigBeanDefinitions(registry);
@@ -239,6 +241,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 	 */
 	@Override
 	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+		// 下面这几行代码看不懂。。。。
 		int factoryId = System.identityHashCode(beanFactory);
 		if (this.factoriesPostProcessed.contains(factoryId)) {
 			throw new IllegalStateException(
@@ -287,11 +290,17 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		//在这一步如果按正常流程 应该是有7个，6个内置的bd，一个我们自己注册的AppConfig.class
 		String[] candidateNames = registry.getBeanDefinitionNames();
 
+		// 其实就是我们的AppConfig是需要扫描处理的，循环是根本直到有几个配置类(可以register多个配置类)，
+		// 也不知道配置类叫什么名字
 		for (String beanName : candidateNames) {
 			BeanDefinition beanDef = registry.getBeanDefinition(beanName);
 			/**
 			 * 如果属性已经设置了，说明该类已经判断了加没加@Configuration注解啦，
-			 * 就不需要走下面的elseif再去判断是否加@Configuration注解
+			 * 就不需要走下面的elseif再去判断是否加@Configuration注解。
+			 * =============================================================
+			 * 在这里判断一下是为了下次再来的时候，对于已经处理过的配置类就不用
+			 * 再走到else if中去再执行一遍
+			 * =============================================================
 			 *
 			 */
 			if (ConfigurationClassUtils.isFullConfigurationClass(beanDef) ||
@@ -303,16 +312,15 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			//判断是否包含@Configuration注解
 			/**
 			 * 在里面的判断逻辑是：
+			 * 根据是否是AnnotatedBeanDefinition来判断是否是注解类，并且是否是
 			 * 加了@Configuration注解的话，就不会去判断其是否加了
 			 * @Component,@ComponentScan,@Import,@ImportResource注解，
-			 * 因为里面的逻辑是if else if。
-			 * 因为加了@Configuration注解，在解析它的时候，就可以去解析其他的四个注解。
-			 * 而对没有加@Configuration注解，只是单独加了其他的四个注解，spring需要单独处理。
+			 * spring的内置类，是不会满足checkConfigurationClassCandidate条件的
 			 *
 			 * 这里也就解释了我们在AppConfig上没有加@Configuration但是加了@ComponentScan也是会被spring解释的
 			 * 就是我们在AppConfig中没有加@Configuration，而加了@Component等spring也会进行解析
 			 * 但是在里面的判断过程中，如果加了@Configuration就会设置一个属性为full,spring就会认为这个bean是全注解类。
-			 * 如果是非@Configuration注解，则会设置属性为lite,表示非全注解类
+			 * 如果是非@Configuration注解，则会设置属性为lite,表示非全注解类。标注这个是为了生成代理类。
 			 *
 			 *
 			 */
@@ -368,7 +376,17 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			parser.validate();
 
 			/**
-			 * @Import得到的都放入到configClasses中的啦
+			 * configClasses 是扫描得到的所有配置类包括AppConfig, @Component以及@Import处理之后得到类
+			 * 最后会对这个configClasses注册到bdMap中
+			 * ==================================================================
+			 * configClasses 中有
+			 * @Component
+			 * 先放入configurationClasses
+			 * import普通类  先放入configurationClassess
+			 * 然后import xxxRegistar 会放入到importBeanDefinitionRegistrars中进行处理
+			 * 然后下面会去loadBeanDefinitions 注册到我们的容器中，下面也会去处理@Bean
+			 * 和 import xxxRegistar的情况
+			 * ===================================================================
 			 */
 			Set<ConfigurationClass> configClasses = new LinkedHashSet<>(parser.getConfigurationClasses());
 			configClasses.removeAll(alreadyParsed);
@@ -460,6 +478,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 							"is a non-static @Bean method with a BeanDefinitionRegistryPostProcessor " +
 							"return type: Consider declaring such methods as 'static'.");
 				}
+				// 找到所有的全注解类
 				configBeanDefs.put(beanName, (AbstractBeanDefinition) beanDef);
 			}
 		}
@@ -469,6 +488,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			return;
 		}
 
+		// 对于全注解类执行cglib代理
 		ConfigurationClassEnhancer enhancer = new ConfigurationClassEnhancer();
 		for (Map.Entry<String, AbstractBeanDefinition> entry : configBeanDefs.entrySet()) {
 			AbstractBeanDefinition beanDef = entry.getValue();
@@ -485,6 +505,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 							logger.debug(String.format("Replacing bean definition '%s' existing class '%s' with " +
 									"enhanced class '%s'", entry.getKey(), configClass.getName(), enhancedClass.getName()));
 						}
+						// 所以对于全注解类会生成代理类，放入到BeanClass中
 						beanDef.setBeanClass(enhancedClass);
 					}
 				}

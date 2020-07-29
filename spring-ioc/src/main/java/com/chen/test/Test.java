@@ -1,10 +1,7 @@
 package com.chen.test;
 
 import com.chen.app.AppConfig;
-import com.chen.app.dao.UserDaoImpl;
-import com.chen.dao.IndexDao;
-import com.chen.dao.IndexDao8;
-import com.chen.dao.IndexDao9;
+import com.chen.dao.IndexDao12;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 /**
@@ -17,7 +14,9 @@ public class Test {
 		//把spring所有的前提环境准备好
 		AnnotationConfigApplicationContext context =
 				new AnnotationConfigApplicationContext(AppConfig.class);
-		context.getBean(IndexDao9.class);
+
+		AppConfig indexDao12 = context.getBean(AppConfig.class);
+		indexDao12.test();
 	}
 
 }

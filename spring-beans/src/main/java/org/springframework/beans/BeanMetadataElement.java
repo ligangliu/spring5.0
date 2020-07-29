@@ -25,6 +25,10 @@ import org.springframework.lang.Nullable;
  * @author Juergen Hoeller
  * @since 2.0
  */
+
+/**
+ * 存的就是class所在类文件所在的磁盘位置
+ */
 public interface BeanMetadataElement {
 
 	/**

@@ -432,7 +432,8 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 										(dbd != null && !mbd.isLazyInit()) || containsSingleton(beanName)) &&
 								(includeNonSingletons ||
 										(dbd != null ? mbd.isSingleton() : isSingleton(beanName))) &&
-								isTypeMatch(beanName, type);
+										// 里面会去处理FactoryBean的情况
+										isTypeMatch(beanName, type);
 						if (!matchFound && isFactoryBean) {
 							// In case of FactoryBean, try to match FactoryBean instance itself next.
 							beanName = FACTORY_BEAN_PREFIX + beanName;
@@ -742,8 +743,10 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		// Trigger initialization of all non-lazy singleton beans...
 		for (String beanName : beanNames) {
 			/**
-			 * getMergedLocalBeanDefinition 应该是在xml中才用到
-			 * 先不管吧，现在基本上没有使用的地方啦
+			 * getMergedLocalBeanDefinition，因为bd可能会有setParent()有父bd。
+			 * 所以这里在初始化之前，是需要合并的
+			 * 其实在invokeBeanFactoryPostProcessors(beanFactory);中的getBeanNameForType的时候
+			 * 并且放入了缓存中。因为在哪里的过程中就需要用到。
 			 */
 			RootBeanDefinition bd = getMergedLocalBeanDefinition(beanName);
 			//如果该类不是单列的，而且是单列的，并且不是懒加载的
@@ -1071,7 +1074,9 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	public Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
 			@Nullable Set<String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException {
 
+		// 看不懂。。。。
 		descriptor.initParameterNameDiscovery(getParameterNameDiscoverer());
+		// 不知道干啥的。。。
 		if (Optional.class == descriptor.getDependencyType()) {
 			return createOptionalDependency(descriptor, requestingBeanName);
 		}
@@ -1083,11 +1088,18 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			return new Jsr330ProviderFactory().createDependencyProvider(descriptor, requestingBeanName);
 		}
 		else {
+			/**
+			 * 比如在@Autowired上加一个@Lazy，表示使用到这个属性的时候才及逆行属性注入。。。
+			 * 这场景没使用过。。。。
+			 * 看不懂。。。。
+			 * 不影响主流程
+			 * 讲道理这种代码什么需求会使用的到呀？？？？？
+			 */
 			Object result = getAutowireCandidateResolver().getLazyResolutionProxyIfNecessary(
 					descriptor, requestingBeanName);
 			if (result == null) {
 				/**
-				 *
+				 * 这里就是正常情况去getBean
 				 */
 				result = doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter);
 			}
@@ -1099,14 +1111,16 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	public Object doResolveDependency(DependencyDescriptor descriptor, @Nullable String beanName,
 			@Nullable Set<String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException {
 
+		// 不知道干啥的。。。。不重要
 		InjectionPoint previousInjectionPoint = ConstructorResolver.setCurrentInjectionPoint(descriptor);
 		try {
+			// 可以理解为就是一个缓存，如果能直接拿到，就不用再去走下面那么复杂的流程
 			Object shortcut = descriptor.resolveShortcut(this);
 			if (shortcut != null) {
 				return shortcut;
 			}
 
-			// 拿到依赖的类型,所以Autowired是默认根据类型来注入
+			// 拿到依赖的类型,所以Autowired是默认根据类型来注入。descriptor里面封装了我们的依赖信息
 			Class<?> type = descriptor.getDependencyType();
 			Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
 			if (value != null) {
@@ -1121,6 +1135,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 						converter.convertIfNecessary(value, type, descriptor.getMethodParameter()));
 			}
 
+			// 处理多个Bean的情况，如注入的是一个list<I>,I可能有多个实现类
 			Object multipleBeans = resolveMultipleBeans(descriptor, beanName, autowiredBeanNames, typeConverter);
 			if (multipleBeans != null) {
 				return multipleBeans;
@@ -1140,6 +1155,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			Object instanceCandidate;
 
 			if (matchingBeans.size() > 1) {
+				// 推断需要注入的属性名字，可能会处理别名等各种情况吧
 				autowiredBeanName = determineAutowireCandidate(matchingBeans, descriptor);
 				if (autowiredBeanName == null) {
 					if (isRequired(descriptor) || !indicatesMultipleBeans(type)) {
@@ -1152,11 +1168,13 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 						return null;
 					}
 				}
-				// 如果找到的类型有多个的话，会根据byName直接去获取
+				// 如果找到的类型有多个的话，直接mapping matchingBeans中的key
+				// 所以这里并不是说通过name去容器工厂中找，而是从byType找到map得key进行mapping
 				instanceCandidate = matchingBeans.get(autowiredBeanName);
 			}
 			else {
 				// We have exactly one match.
+				// 只有一个的情况，那么肯定就是byType找到的
 				Map.Entry<String, Object> entry = matchingBeans.entrySet().iterator().next();
 				autowiredBeanName = entry.getKey();
 				instanceCandidate = entry.getValue();
@@ -1165,6 +1183,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			if (autowiredBeanNames != null) {
 				autowiredBeanNames.add(autowiredBeanName);
 			}
+			// 想不明白，为啥会有instanceCandidate instanceof Class的情况
 			if (instanceCandidate instanceof Class) {
 				/**
 				 * 去获取依赖的属性值，里面就是return beanFactory.getBean(beanName);
@@ -1220,6 +1239,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			return result;
 		}
 		else if (Collection.class.isAssignableFrom(type) && type.isInterface()) {
+			// list的情况，会去拿到泛型
 			Class<?> elementType = descriptor.getResolvableType().asCollection().resolveGeneric();
 			if (elementType == null) {
 				return null;
@@ -1307,11 +1327,14 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	protected Map<String, Object> findAutowireCandidates(
 			@Nullable String beanName, Class<?> requiredType, DependencyDescriptor descriptor) {
 		/**
-		 * 根据byType去找到可以注入的类型
+		 * 根据byType去找到可以注入的类型,里面会去处理FactoryBean的情况
 		 */
 		String[] candidateNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
 				this, requiredType, true, descriptor.isEager());
 		Map<String, Object> result = new LinkedHashMap<>(candidateNames.length);
+		// 如果注入的是特殊类型，这里需要做个特殊的处理
+		// resolvableDependencies.keySet() 分别是4种特殊的类型
+		// ApplicationEventPublisher，ResourceLoader, BeanFactory, ApplicationContext
 		for (Class<?> autowiringType : this.resolvableDependencies.keySet()) {
 			if (autowiringType.isAssignableFrom(requiredType)) {
 				Object autowiringValue = this.resolvableDependencies.get(autowiringType);
@@ -1324,11 +1347,13 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		}
 		for (String candidate : candidateNames) {
 			if (!isSelfReference(beanName, candidate) && isAutowireCandidate(candidate, descriptor)) {
+				// 这里会去spring容器中去getBean，如果没有创建的话会getBean创建，并且放到result中
 				addCandidateEntry(result, candidate, descriptor, requiredType);
 			}
 		}
 		if (result.isEmpty() && !indicatesMultipleBeans(requiredType)) {
 			// Consider fallback matches if the first pass failed to find anything...
+			// 看不懂。。。。难道这里是找不到得一种保证机制嘛？
 			DependencyDescriptor fallbackDescriptor = descriptor.forFallbackMatch();
 			for (String candidate : candidateNames) {
 				if (!isSelfReference(beanName, candidate) && isAutowireCandidate(candidate, fallbackDescriptor)) {

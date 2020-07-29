@@ -359,6 +359,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 							throw ex;
 						}
 					});
+					// 处理FactoryBean的情况，如果是FactoryBean且name是以&开头，直接返回sharedInstance
+					// 如果是FactoryBean，但是name不是以&开头，那么会调用getObeject返回
 					bean = getObjectForBeanInstance(sharedInstance, name, beanName, mbd);
 				}
 
@@ -1254,6 +1256,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 		if (mbd != null) {
 			return mbd;
 		}
+		// 递归调用。。。。父bd还有父bd。。。。
 		return getMergedBeanDefinition(beanName, getBeanDefinition(beanName));
 	}
 
@@ -1286,6 +1289,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			throws BeanDefinitionStoreException {
 
 		synchronized (this.mergedBeanDefinitions) {
+			// spring是遍历子类的bd信息，copy到RootBeanDefinition中
 			RootBeanDefinition mbd = null;
 
 			// Check with full lock now in order to enforce the same merged instance.
@@ -1294,9 +1298,10 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			}
 
 			if (mbd == null) {
-				if (bd.getParentName() == null) {
+				if (bd.getParentName() == null) { // 没有父类bd就不需要合并
 					// Use copy of given root bean definition.
 					if (bd instanceof RootBeanDefinition) {
+						// 直接复制就好
 						mbd = ((RootBeanDefinition) bd).cloneBeanDefinition();
 					}
 					else {
@@ -1309,6 +1314,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					try {
 						String parentBeanName = transformedBeanName(bd.getParentName());
 						if (!beanName.equals(parentBeanName)) {
+							// 得到父类的bd(父bd还可能有父bd...里面是递归调用的)
+							// 大部分注解类的到的bd是没有父bd的，可能直接在代码里面直接创建bd，然后设置父bd
 							pbd = getMergedBeanDefinition(parentBeanName);
 						}
 						else {
@@ -1329,6 +1336,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					}
 					// Deep copy with overridden values.
 					mbd = new RootBeanDefinition(pbd);
+					// 覆盖父类的bd的属性，以子类的bd设置的属性为标准
 					mbd.overrideFrom(bd);
 				}
 
@@ -1348,6 +1356,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				// Cache the merged bean definition for the time being
 				// (it might still get re-merged later on in order to pick up metadata changes)
 				if (containingBd == null && isCacheBeanMetadata()) {
+					// 缓存一下
 					this.mergedBeanDefinitions.put(beanName, mbd);
 				}
 			}

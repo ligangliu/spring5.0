@@ -9,14 +9,9 @@ import org.springframework.stereotype.Component;
  * @Date 2020-07-12 16:15
  */
 @Component
-public class IndexDao8 implements FactoryBean {
-	@Override
-	public Object getObject() throws Exception {
-		return new Student2();
-	}
+public class IndexDao8 {
 
-	@Override
-	public Class<?> getObjectType() {
-		return Student2.class;
+	public void test() {
+		System.out.println("indexDao8....");
 	}
 }

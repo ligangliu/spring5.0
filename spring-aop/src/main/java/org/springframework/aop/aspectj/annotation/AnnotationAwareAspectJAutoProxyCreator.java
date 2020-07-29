@@ -75,6 +75,10 @@ public class AnnotationAwareAspectJAutoProxyCreator extends AspectJAwareAdvisorA
 		this.aspectJAdvisorFactory = aspectJAdvisorFactory;
 	}
 
+	/**
+	 * 因为实现了Aware接口会调用setBeanFactory方法，在这个方法里面会调用到initBeanFactory方法
+	 * 在这里面会为aspectJAdvisorsBuilder赋值
+	 */
 	@Override
 	protected void initBeanFactory(ConfigurableListableBeanFactory beanFactory) {
 		super.initBeanFactory(beanFactory);
@@ -91,7 +95,14 @@ public class AnnotationAwareAspectJAutoProxyCreator extends AspectJAwareAdvisorA
 		// Add all the Spring advisors found according to superclass rules.
 		List<Advisor> advisors = super.findCandidateAdvisors();
 		// Build Advisors for all AspectJ aspects in the bean factory.
+		// 去找到我们所有的Aspect注解的类的配置信息
+		/**
+		 * ===========================================================
+		 * 这个aspectJAdvisorsBuilder是在上面的initBeanFactory()中被赋值的
+		 * ===========================================================
+		 */
 		if (this.aspectJAdvisorsBuilder != null) {
+			// 然后在this.aspectJAdvisorsBuilder.buildAspectJAdvisors()会去找到配置了Aspect的信息
 			advisors.addAll(this.aspectJAdvisorsBuilder.buildAspectJAdvisors());
 		}
 		return advisors;

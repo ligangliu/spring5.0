@@ -77,9 +77,11 @@ public class SimpleInstantiationStrategy implements InstantiationStrategy {
 						}
 						else {
 							//得到默认的构造方法， constructorToUse就是表示spring使用那个构造方法创建我的实例
+							// 注意这里是getDeclaredConstructor()而不是getDeclaredConstructors() 是没有s的
 							constructorToUse = clazz.getDeclaredConstructor();
 						}
-						//表示spring使用那个构造方法构造对象
+						//表示spring使用那个构造方法构造对象，这个就是spring做了一个快照，使得原型的时候
+						// 下次再来就不用推断使用那个构造方法啦
 						bd.resolvedConstructorOrFactoryMethod = constructorToUse;
 					}
 					catch (Throwable ex) {

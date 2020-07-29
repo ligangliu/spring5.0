@@ -173,7 +173,7 @@ class ConfigurationClassParser {
 			BeanDefinition bd = holder.getBeanDefinition();
 			try {
 				// 这里是解析注解类的入口
-				// 讲道理这里一定是加了注解的
+				// 讲道理这里一定是加了注解的,也就是AppConfig
 				if (bd instanceof AnnotatedBeanDefinition) {
 					//解析注解对象 解析AppConfig
 					parse(((AnnotatedBeanDefinition) bd).getMetadata(), holder.getBeanName());
@@ -333,6 +333,7 @@ class ConfigurationClassParser {
 					 * 需要再进行解析一下
 					 */
 					if (ConfigurationClassUtils.checkConfigurationClassCandidate(bdCand, this.metadataReaderFactory)) {
+						// 这里又会去递归处理到我们的配置类
 						parse(bdCand.getBeanClassName(), holder.getBeanName());
 					}
 				}
@@ -354,13 +355,15 @@ class ConfigurationClassParser {
 		 * 对于@Import注解是将其放入到this.configurationClasses.put(configClass, configClass);
 		 * 在后续进行注册至bd中
 		 *
-		 * getImports(sourceClass) 获得Import类
+		 * getImports(sourceClass) 从该sourceClass的注解中获取Import的信息
 		 */
 		processImports(configClass, sourceClass, getImports(sourceClass), true);
 
 		// Process any @ImportResource annotations
 		/**
+		 * ======================================
 		 * 处理@ImportResource
+		 * =======================================
 		 */
 		AnnotationAttributes importResource =
 				AnnotationConfigUtils.attributesFor(sourceClass.getMetadata(), ImportResource.class);
@@ -373,6 +376,11 @@ class ConfigurationClassParser {
 			}
 		}
 
+		/**
+		 * ======================================
+		 * 处理@Bean的情况
+		 * ======================================
+		 */
 		// Process individual @Bean methods
 		Set<MethodMetadata> beanMethods = retrieveBeanMethodMetadata(sourceClass);
 		for (MethodMetadata methodMetadata : beanMethods) {

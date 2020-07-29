@@ -174,6 +174,7 @@ public class CachedIntrospectionResults {
 			return results;
 		}
 
+		// 这里是拿到byType的需要找到的setXX的属性
 		results = new CachedIntrospectionResults(beanClass);
 		ConcurrentMap<Class<?>, CachedIntrospectionResults> classCacheToUse;
 
@@ -246,6 +247,7 @@ public class CachedIntrospectionResults {
 		}
 		return (shouldIntrospectorIgnoreBeaninfoClasses ?
 				Introspector.getBeanInfo(beanClass, Introspector.IGNORE_ALL_BEANINFO) :
+				// 里面是jdk的代码逻辑啦，也会处理父类的内省机制的代码
 				Introspector.getBeanInfo(beanClass));
 	}
 
@@ -270,6 +272,8 @@ public class CachedIntrospectionResults {
 			if (logger.isTraceEnabled()) {
 				logger.trace("Getting BeanInfo for class [" + beanClass.getName() + "]");
 			}
+			// BeanInfo中就包含了所有的set属性，包括父类的，所以Object中有一个属性class
+			// 其实里面是调用jdk代码，是去找到内省set/get的代码
 			this.beanInfo = getBeanInfo(beanClass);
 
 			if (logger.isTraceEnabled()) {
@@ -278,6 +282,8 @@ public class CachedIntrospectionResults {
 			this.propertyDescriptorCache = new LinkedHashMap<>();
 
 			// This call is slow so we do it once.
+			// 通过beanInfo可以拿到所有的set方法(必须包含属性列表，应该是需要满足java的内省机制)的属性描述符
+			// 包括父类的,所以这里一般来说应该是有一个父类的object的getClass()
 			PropertyDescriptor[] pds = this.beanInfo.getPropertyDescriptors();
 			for (PropertyDescriptor pd : pds) {
 				if (Class.class == beanClass &&

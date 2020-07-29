@@ -212,6 +212,7 @@ public abstract class BeanFactoryUtils {
 
 		Assert.notNull(lbf, "ListableBeanFactory must not be null");
 		/**
+		 * 调用的是org.springframework.beans.factory.support.DefaultListableBeanFactory#getBeanNamesForType(java.lang.Class, boolean, boolean)
 		 * 这里会根据type,然后拿到所有的beanDefinitionNames，然后一个一个去get里面的对象，进行mapping,
 		 * 在这里面会去做FactoryBean的处理
 		 */

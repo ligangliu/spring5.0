@@ -1,11 +1,10 @@
 package com.chen.app;
 
 import com.chen.dao.IndexDao;
+import com.chen.dao.IndexDao10;
 import com.chen.dao.IndexDao5;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.*;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -14,19 +13,35 @@ import org.springframework.stereotype.Repository;
  */
 @Configuration
 @ComponentScan("com.chen")
-//@EnableAspectJAutoProxy
+@PropertySource("classpath:db.properties")
+@Import(IndexDao10.class)
+@EnableAspectJAutoProxy
 public class AppConfig {
+
+	@Value("${name}")
+	private String name;
+
+	@Value("${age}")
+	private int age;
 
 	@Bean
 	public IndexDao indexDao() {
+		System.out.println("indexDao......");
 		return new IndexDao();
 	}
 
 	@Bean
 	public IndexDao5 indexDao5() {
+		System.out.println("indexDao5......");
+		test();
 		return new IndexDao5();
 	}
 
+	public void test() {
+		System.out.println(name);
+		System.out.println(age);
+		System.out.println("test....");
+	}
 
 	/*@Bean
 	public *//*static*//* IndexDao1 indexDao1() {

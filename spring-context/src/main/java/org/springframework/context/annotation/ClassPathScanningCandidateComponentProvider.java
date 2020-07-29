@@ -204,6 +204,7 @@ public class ClassPathScanningCandidateComponentProvider implements EnvironmentC
 	 */
 	@SuppressWarnings("unchecked")
 	protected void registerDefaultFilters() {
+		// 这里添加的扫描过滤得到的Component
 		this.includeFilters.add(new AnnotationTypeFilter(Component.class));
 		ClassLoader cl = ClassPathScanningCandidateComponentProvider.class.getClassLoader();
 		try {
@@ -425,6 +426,7 @@ public class ClassPathScanningCandidateComponentProvider implements EnvironmentC
 			/**
 			 * 这里会去把所有的指定包下的所有类找出来
 			 * 包括那些没有加上@Component等注解的
+			 * resources 可以理解为就是xx.class的文件
 			 */
 			Resource[] resources = getResourcePatternResolver().getResources(packageSearchPath);
 			boolean traceEnabled = logger.isTraceEnabled();
@@ -435,6 +437,7 @@ public class ClassPathScanningCandidateComponentProvider implements EnvironmentC
 				}
 				if (resource.isReadable()) {
 					try {
+						// 拿到xx.class类的所有注解信息
 						MetadataReader metadataReader = getMetadataReaderFactory().getMetadataReader(resource);
 						/**
 						 * 这里面会去做一下判断逻辑，比如加了@Condition注解
@@ -446,6 +449,7 @@ public class ClassPathScanningCandidateComponentProvider implements EnvironmentC
 							sbd.setResource(resource);
 							sbd.setSource(resource);
 							/**
+							 * 这里判断一些是否合理，比如说在接口上加一个注解@Component，spring就不会给我们扫描进来
 							 * mybatis-spring，mybatis整合spring的时候，会重写这个判断的方法，
 							 * mybatis-spring会重写的这个方法,如果bd是一个接口才会加入进去
 							 */
@@ -510,6 +514,7 @@ public class ClassPathScanningCandidateComponentProvider implements EnvironmentC
 				return false;
 			}
 		}
+		// mybatis在这里添加的是永远返回true,所以添加自定义注解可以在这里添加到includeFilters中
 		for (TypeFilter tf : this.includeFilters) {
 			if (tf.match(metadataReader, getMetadataReaderFactory())) {
 				return isConditionMatch(metadataReader);

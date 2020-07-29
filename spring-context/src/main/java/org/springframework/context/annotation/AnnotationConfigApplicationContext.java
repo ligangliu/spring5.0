@@ -77,14 +77,22 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 		 * 3.@Service等
 		 * 4.spring内部bean(spring 自己的一些bean放入到容器中)，其对应的BeanDefinition 就是RootBeanDefinition
 		 *
+		 * 这个reader就是供外部调用，注册AppConfig.Class。可以理解为spring提供我们一个
+		 * 入口使得我们直接通过一个xx.class -> bd,如果没有提供这个接口的话，
+		 * 那么就需要我们
+		 * AnnotationBeanDefinition abd = new AnnotationBeanDefinition()
+		 * abd.setXxxx();
+		 * abd.setScope();
+		 * 等等，，，，
+		 * 程序员写这些我玩意不就不疯了嘛
+		 *
 		 */
 		this.reader = new AnnotatedBeanDefinitionReader(this);
 
 		/**
-		 * scanner：能够扫描我们的bean,并转换成db,添加至beanFactory中
-		 * 但是实际上我们扫描包不是scanner这个对象
-		 * 扫描包是在refresh()中的invokeBeanFactoryPostProcessors()通过前面注册的ConfigurationClassPostProcessor进行扫描的
-		 * 这里的scanner仅仅是为了程序员能够在外部调用AnnotationConfigApplicationContext.scan()方法扫描自己的包
+		 * scanner：能够扫描我们的bean,并转换成db,添加至beanFactory中,
+		 * 所以scanner的实例化肯定是需要讲this(spring的工厂)传进去的呀，因为扫描的话需要讲扫描得到的bd信息放进去呢
+		 * 这里的scanner可初始化可以让我们在外面使用AnnotationConfigApplicationContext.scan()方法扫描自己的包
 		 */
 		this.scanner = new ClassPathBeanDefinitionScanner(this);
 	}

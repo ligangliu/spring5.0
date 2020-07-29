@@ -11,8 +11,5 @@ import org.springframework.stereotype.Component;
 @Component
 public class IndexDao7 {
 
-	@Autowired
-	private Student2 student2;
-
 
 }

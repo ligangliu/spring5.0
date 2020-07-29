@@ -157,8 +157,11 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 			 * 3.registeredSingletons.add()
 			 */
 			if (!this.singletonObjects.containsKey(beanName)) {
+				// 放的是singletonFactory，并不是直接放的早期bean哈。
+				// 后面就可以通过singletonFactory.getObject()获取
 				this.singletonFactories.put(beanName, singletonFactory);
 				this.earlySingletonObjects.remove(beanName);
+				// 表示这个bdMap中的该beanName放入到一个list中而已，不是很重要
 				this.registeredSingletons.add(beanName);
 			}
 		}
@@ -196,12 +199,14 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 		 * 对indexDao2中的indexDao1进行属性注入的时候
 		 * 此时对于indexDao1而言
 		 *  this.singletonObjects.get(beanName) == null的，这是因为singletonObjects是完全已经创建好的，并且populate啦的
-		 * isSingletonCurrentlyInCreation(beanName)应该是返回true的
+		 * isSingletonCurrentlyInCreation(beanName)应该是返回true的，表示依赖的indexDao1是正在创建中
 		 */
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
 			synchronized (this.singletonObjects) {
 				// 这里是从earlySingletonObjects.get(beanName);中获取的哦
 				singletonObject = this.earlySingletonObjects.get(beanName);
+				// 循环依赖的时候，indexDao2() 注入indexDao1()的时候，就会满足下面的if条件
+				// allowEarlyReference 是默认传过来的是为true, spring就是默认支持循环依赖的
 				if (singletonObject == null && allowEarlyReference) {
 					// singletonFactories 应该放的就是还没有被属性注入的
 					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
@@ -209,7 +214,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					 * 完成了依赖注入
 					 * singletonObjects 用于存放完全初始化好的bean,bean从该缓存中取出的，直接可以使用
 					 * singletonFactories 存放bean,用于bean工厂对象解决循环依赖
-					 * earlySingletonObjects 存放原始的bean对象，用于解决循环依赖，
+					 * earlySingletonObjects 存放原始的bean对象，
 					 * 注意：存在里面的对象没有被填充属性
 					 *
 					 * 那么earlySingletonObjects到底有啥作用呢？？？
@@ -240,6 +245,13 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 						 *
 						 */
 						singletonObject = singletonFactory.getObject();
+						// earlySingletonObjects我认为主要提升效率的问题，
+						// 因为如果还有其他的a 依赖 b b 依赖 a 和 c，c又依赖a的话呢？那么在为b注入c的时候。
+						// 然后c又会去注入a啦，如果a是一个复杂的过程呢？且总不能又去调用singletonFactory.getObject()再来一次把，
+						// 这里可能是一个比较耗时的过程呢(因为可能会提前生成代理，
+						// 就是这个循环的所依赖的IndexDao1可能需要生成代理,如果不去提前暴露生成代理，那么IndexDao2中的注入的indexDao不就是不是代理对象了嘛？,
+						// 然后生成代理总不能每次去重新生成代理吧。
+						// 一：不合理，二：这也是一个比较耗费的时间的过程，效率也比较低)？
 						this.earlySingletonObjects.put(beanName, singletonObject);
 						this.singletonFactories.remove(beanName);
 					}

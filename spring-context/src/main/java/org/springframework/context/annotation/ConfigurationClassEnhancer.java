@@ -99,6 +99,8 @@ class ConfigurationClassEnhancer {
 	 */
 	public Class<?> enhance(Class<?> configClass, @Nullable ClassLoader classLoader) {
 		//判断是否代理过，如果有EnhancedConfiguration该接口，说明其已经被代理过(因为在cglib代理过程中会生成该接口)
+		// cglib代理之后的类，会是是实现一个EnhancedConfiguration接口，可以从newEnhancer中查看，
+		// 反正这里可以通过这个接口来判断是否产生了代理
 		if (EnhancedConfiguration.class.isAssignableFrom(configClass)) {
 			if (logger.isDebugEnabled()) {
 				logger.debug(String.format("Ignoring request to enhance %s as it has " +
@@ -110,7 +112,18 @@ class ConfigurationClassEnhancer {
 			}
 			return configClass;
 		}
-		//生成cglib代理
+		/**
+		 * 生成cglib代理,代理肯定是CGLIB extend AppConfig
+		 *
+		 * 如AppConfig{
+		 * @Bean
+		 * public IndexDao indexDao() {
+		 *     return new IndexDao();
+		 * }
+		 *
+		 * cglib代理肯定是一般来说加一些代理的逻辑
+		 * 最后super.indecDao()
+		 */
 		Class<?> enhancedClass = createClass(newEnhancer(configClass, classLoader));
 		if (logger.isDebugEnabled()) {
 			logger.debug(String.format("Successfully enhanced %s; enhanced class name is: %s",
@@ -124,6 +137,7 @@ class ConfigurationClassEnhancer {
 	 */
 	private Enhancer newEnhancer(Class<?> configSuperClass, @Nullable ClassLoader classLoader) {
 		Enhancer enhancer = new Enhancer();
+		// 父类就是我们需要代理的target对象
 		enhancer.setSuperclass(configSuperClass);
 		/**
 		 * 这里为什么要生成一个接口EnhancedConfiguration呢？
@@ -137,13 +151,20 @@ class ConfigurationClassEnhancer {
 		 */
 		enhancer.setInterfaces(new Class<?>[] {EnhancedConfiguration.class});
 		enhancer.setUseFactory(false);
+		// 生成名字的八
 		enhancer.setNamingPolicy(SpringNamingPolicy.INSTANCE);
 		/**
 		 * 可以理解为 为我们的cglib代理注入一个属性 beanFactory
 		 */
 		enhancer.setStrategy(new BeanFactoryAwareGeneratorStrategy(classLoader));
 		/**
-		 *  这里就是对一个@Bean 调用另一个@Bean的情况
+		 * =========================================================================
+		 *  这里就是对一个@Bean 调用另一个@Bean的情况，这里
+		 *  是解决代理对象的关键
+		 *  想想道理的逻辑，也就是需要将我们代理的逻辑set进去的，然后这里的setCallbackFilter，
+		 *  类似于我们的jdk的动态代理，为每一个方法代理的时候，最后调用的就是h.invoke()的InvocationHandler
+		 *  cglib，内部就是调用到CALLBACK_FILTER中的实现了MethodInterceptor接口的啊
+		 * =========================================================================
 		 */
 		enhancer.setCallbackFilter(CALLBACK_FILTER);
 		enhancer.setCallbackTypes(CALLBACK_FILTER.getCallbackTypes());
@@ -382,6 +403,12 @@ class ConfigurationClassEnhancer {
 			 * 		person1();
 			 * 		return new Person2();
 			 * 	}
+			 *
+			 * 	isCurrentlyInvokedFactoryMethod 就是判断当调用person2()中的person1()的时候，
+			 * 	我们会把当前正在创建的方法放在list中，然后调用person1()的时候，拿出正在创建的方法，
+			 * 	和person1()对比，发现person2() != person1()的。那么就会去执行resolveBeanReference
+			 * 	的特殊逻逻辑，就不会再次去创建一个bean啦，而是从工厂中直接拿。否则就调用父类的方法
+			 * 	直接创建。
 			 */
 			if (isCurrentlyInvokedFactoryMethod(beanMethod)) {
 				// The factory is calling the bean method in order to instantiate and register the bean
@@ -401,6 +428,7 @@ class ConfigurationClassEnhancer {
 				//proxy.invokeSuper()；调用父类的new Person1();创建父类的
 				return cglibMethodProxy.invokeSuper(enhancedConfigInstance, beanMethodArgs);
 			}
+
 
 			return resolveBeanReference(beanMethod, beanMethodArgs, beanFactory, beanName);
 		}
@@ -429,6 +457,7 @@ class ConfigurationClassEnhancer {
 						}
 					}
 				}
+				// 直接通过beanFactory中获取
 				Object beanInstance = (useArgs ? beanFactory.getBean(beanName, beanMethodArgs) :
 						beanFactory.getBean(beanName));
 				if (!ClassUtils.isAssignableValue(beanMethod.getReturnType(), beanInstance)) {

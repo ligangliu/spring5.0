@@ -93,6 +93,8 @@ abstract class ConfigurationClassUtils {
 		 */
 		//讲道理 只有我们的AppConfig的配置类的bd信息才是AnnotatedBeanDefinition
 		//spring内置的那些后置处理器bd是RootBeanDefinition
+		// 这里是根据是否判断AnnotatedBeanDefinition来确定该类是否是一个配置类，这就是为什么在一个
+		// @Component中加入@Bean也可以扫描得到的，因为这里会将该@Component加入到配置类再进行处理
 		if (beanDef instanceof AnnotatedBeanDefinition &&
 				className.equals(((AnnotatedBeanDefinition) beanDef).getMetadata().getClassName())) {
 			// Can reuse the pre-parsed metadata from the given BeanDefinition...
@@ -117,6 +119,7 @@ abstract class ConfigurationClassUtils {
 				return false;
 			}
 		}
+		// 标注full或lite, 一是为了full最后会生成代理类，二是为了下次再来执行的时候，判断是否已经执行过
 		//判断是否加了@Configuration注解，加了则在属性里面加上表示CONFIGURATION_CLASS_ATTRIBUTE
 		if (isFullConfigurationCandidate(metadata)) {
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_FULL);
@@ -134,6 +137,7 @@ abstract class ConfigurationClassUtils {
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_LITE);
 		}
 		else {
+			// 讲道理对于spring的内置的那几个bd,会不满足full和lite，所以会走到直接return false。
 			return false;
 		}
 

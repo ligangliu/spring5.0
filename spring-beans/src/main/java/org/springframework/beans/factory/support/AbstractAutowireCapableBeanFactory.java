@@ -490,7 +490,10 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			// Give BeanPostProcessors a chance to return a proxy instead of the target bean instance.
 			/**
 			 * ===================================================================
-			 * 第一次应用spring的后置处理器，我的bean不交给spring去管理
+			 * 第一次应用spring的后置处理器，我的bean不交给spring去管理。
+			 * 而且如果这里加了@EnableAspectJAutoProxy的话，会去判断是否需要代理，对于
+			 * 一些已经生成了代理，以及不能代理的如@Aspect的类不能代理的放在advisedBeans中
+			 * 后面生成代理的后置处理器会从这个里面取信息
 			 * ===================================================================
 			 * 如，对于某些bean的属性不需要spring管理，在这里进行处理
 			 * InstantiationAwareBeanPostProcessor 这里会使得我们的bean被提前终止。
@@ -512,7 +515,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		try {
 			/**
+			 * ==================================================
 			 * doCreateBean()真正实例化bean的过程
+			 * ==================================================
 			 */
 			Object beanInstance = doCreateBean(beanName, mbdToUse, args);
 			if (logger.isDebugEnabled()) {
@@ -558,8 +563,11 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 		if (instanceWrapper == null) {
 			/**
-			 * 实例化，就是new，判断是否使用默认构造方法构造，无参构造的时候是非常直接反射构造就好
-			 * 如果是有参构造，
+			 * ====================================================================
+			 * 实例化，就是通过反射使用构造方法创建，判断是否使用默认构造方法构造，无参构造的时候是非常直接反射构造就好
+			 * 如果是有参构造，会推断构造方法，使用构造方法反射创建出来
+			 * 使用推断构造方法也是相当复杂的。。。。
+			 * ====================================================================
 			 */
 			instanceWrapper = createBeanInstance(beanName, mbd, args);
 		}
@@ -575,11 +583,22 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			if (!mbd.postProcessed) {
 				try {
 					/**
-					 * ===============================================
+					 * ============================================================================
 					 * 第三次调用后置处理器
-					 * ===============================================
+					 * 把bd里面的需要注入的属性拿出来(@Autowired, @Resource, @Value)，放到一个map中，
+					 * 在populate注入的时候，就直接从该map中拿就好
+					 * 为什么在这里是MergedBeanDefinition呢？
+					 * BeanDefinition{
+					 *     1.ScanxxxBd
+					 *     2.AnnotationBd
+					 *     3.GeneraxxxBd
+					 *     4.RootBd
+					 * }
+					 * 这是因为上面的4个都是不知道该bd是否又父bd的，其实bean走到这一步啦，
+					 * 应该是已经merge了的父bd的
+					 * 合并的逻辑是在初始化的之前在ConfigClassBeanFactoryProcessor扫描之后就会合并的
+					 * =============================================================================
 					 */
-					// 调用后置处理器
 					applyMergedBeanDefinitionPostProcessors(mbd, beanType, beanName);
 				}
 				catch (Throwable ex) {
@@ -593,7 +612,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		// Eagerly cache singletons to be able to resolve circular references
 		// even when triggered by lifecycle interfaces like BeanFactoryAware.
 		/**
-		 * earlySingletonExposure 就是是否支持循环以来，
+		 * earlySingletonExposure 就是是否支持循环依赖，
 		 * allowCircularReferences 就是默认是true的，所以想要关闭循环依赖，
 		 * 可以在外面带得到AbstractAutowireCapableBeanFactory，然后再设置这个属性为false，
 		 * 但是需要手动refresh，否则默认的new AnnotationConfigApplicationContext(AppConfig.class)
@@ -1085,6 +1104,18 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		for (BeanPostProcessor bp : getBeanPostProcessors()) {
 			if (bp instanceof MergedBeanDefinitionPostProcessor) {
 				MergedBeanDefinitionPostProcessor bdp = (MergedBeanDefinitionPostProcessor) bp;
+				// 找到需要注入的属性,具体是CommonAnnotationBeanPostProcessor和
+				// AutowiredAnnotationBeanPostProcessor后置处理器进行处理
+				/**
+				 * CommonAnnotationBeanPostProcessor:
+				 * 1、调用父类的方法，查找所有的生命周期回调方法---初始化和销毁
+				 * 2、findResourceMetadata----找出所有需要完成注入的“点”-----@Resource注解
+				 * 3、checkConfigMembers----injectedElements 做了一个复制
+				 * AutowiredAnnotationBeanPostProcessor
+				 * 2、findAutowiredMetadata----找出所有需要完成注入的“点”-----@Autowired @Value注解方法或者属性---为什么不需要构造方法
+				 * 3、checkConfigMembers----injectedElements 做了一个复制
+				 *
+				 */
 				bdp.postProcessMergedBeanDefinition(mbd, beanType, beanName);
 			}
 		}
@@ -1102,9 +1133,18 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		Object bean = null;
 		if (!Boolean.FALSE.equals(mbd.beforeInstantiationResolved)) {
 			// Make sure bean class is actually resolved at this point.
+			/**
+			 * 合成类，就是在一个类中的内部类的构造方法是私有的，但是在外部是可以使用到内部类的，
+			 * 这就矛盾了，java为了解决这个问题，就会默认生成一个公有的构造方法，构造方法有一个参数就是合成类，
+			 * 就会有一个合成类xxx.class
+			 * 所以spring扫描到这个合成类，就会迷茫。。。
+			 *
+			 * 如果后面忘记了，就可以写一个内部类，然后内部类的构造方法是私有的，看编译的class目录就好
+			 */
 			if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
 				Class<?> targetType = determineTargetType(beanName, mbd);
 				if (targetType != null) {
+					// 一般 这个bean都会返回为null
 					bean = applyBeanPostProcessorsBeforeInstantiation(targetType, beanName);
 					if (bean != null) {
 						bean = applyBeanPostProcessorsAfterInitialization(bean, beanName);
@@ -1155,23 +1195,26 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	 */
 	protected BeanWrapper createBeanInstance(String beanName, RootBeanDefinition mbd, @Nullable Object[] args) {
 		// Make sure bean class is actually resolved at this point.
+		// 从bd中拿到beanClass
 		Class<?> beanClass = resolveBeanClass(mbd, beanName);
 
 		if (beanClass != null && !Modifier.isPublic(beanClass.getModifiers()) && !mbd.isNonPublicAccessAllowed()) {
 			throw new BeanCreationException(mbd.getResourceDescription(), beanName,
 					"Bean class isn't public, and non-public access not allowed: " + beanClass.getName());
 		}
-
+		// 不知道干啥的，不重要。。。
 		Supplier<?> instanceSupplier = mbd.getInstanceSupplier();
 		if (instanceSupplier != null) {
 			return obtainFromSupplier(instanceSupplier, beanName);
 		}
 		/**
+		 * ===============================================================================
 		 * factoryMehtodName 在AppConfig中的@Bean中配置的bd信息中factoryName = appConfig
 		 * 或者在xml中可以配置factory-method属性。
 		 *
 		 * @Bean的时候，如果是static方法时，会beanDef.setFactoryMethodName(methodName);
 		 * 如果不是static方法的时候，beanDef.setUniqueFactoryMethodName(methodName);
+		 * ===============================================================================
 		 */
 		if (mbd.getFactoryMethodName() != null) {
 			return instantiateUsingFactoryMethod(beanName, mbd, args);
@@ -1179,14 +1222,19 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		// Shortcut when re-creating the same bean...
 		/**
+		 * 下面的这部分代码比较难。。。。
 		 * shortcut: 快捷方式，什么意思呢？
 		 * 当多次构建同一个bean时，可以使用整个shortcut,也就是说不再需要再次推断因该使用那种方式构造bean,
 		 * 比如在多次构建同一个prototype类型的bean时，就可以
 		 */
-		boolean resolved = false;
+		boolean resolved = false; // 表示有没有解析过，解析一个对象(使用那个构造方法反射创建)如何创建，
 		boolean autowireNecessary = false;
-		if (args == null) {
-			synchronized (mbd.constructorArgumentLock) {
+		if (args == null) { // 讲道理args大部分是为空的，这个args是getBean(IndexDao.class, "args")传过来的
+			synchronized (mbd.constructorArgumentLock) { // 锁的是bd里面的一个属性
+				// != null 表示已经找到了，讲道理原型的时候就第二次来的时候肯定就不需要再去推断啦
+				// resolvedConstructorOrFactoryMethod 很重要，存放的是使用的那个构造方法，避免每次都再去解析一遍
+				// 其实吧，spring解析构造方法是一种很困难的东西，
+				// 因为可能一个类会有很多类的构造方法，需要找一个合格的构造方法还是比较复杂的
 				if (mbd.resolvedConstructorOrFactoryMethod != null) {
 					resolved = true;
 					//如果已经解析了构造方法
@@ -1232,14 +1280,26 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		 */
 		// 当类只有一个默认的无参构造器的时候，整个时候spring 会ctors会为null
 		/**
-		 * =================================================
+		 * ============================================================================
 		 * 第二次执行后置处理器
-		 * =================================================
+		 * 如果ctors返回空，那么就会调用无参构造方法进行反射构造。
+		 * determineConstructorsFromBeanPostProcessors 推断构造方法 和注入模型有关
+		 * 如果是手动装配(默认)：
+		 *		提供两个合格的(两个有参构造方法) --- 报异常
+		 *	    提供多个模糊的构造方法(有一个无参和多个有参构造方法) -- spring推断不出来，那么就会返回null,最后还是调用无参构造
+		 *	    如果只是提供了一个有参构造 --- spring就会推断出这个唯一的有参构造方法
+		 *	    如果多个构造方法且都是@Autowired(true)或不全是false(即有true，又有false) ---- 报异常
+		 *	    如果多个构造方法但是@Autowired(false) 返回多个构造方法，再次进行推断
+		 *  如果是自动装配
+		 *     测试：可以写一个类实现BeanFactoryPostProcessor, 然后再里面对需要测试的类，修改装配模式
+		 *     autowireConstructor(beanName, mbd, ctors, args)里面又会再次推断一遍
+		 * ============================================================================
 		 */
 		Constructor<?>[] ctors = determineConstructorsFromBeanPostProcessors(beanClass, beanName);
 		if (ctors != null || mbd.getResolvedAutowireMode() == AUTOWIRE_CONSTRUCTOR ||
 				mbd.hasConstructorArgumentValues() || !ObjectUtils.isEmpty(args)) {
-			//调用有参构造方法，这个方法里面相当复杂
+			//调用有参构造方法，这个方法里面相当复杂，因为里面如果是使用AUTOWIRE_CONSTRUCTOR
+			// 自动注入的话，就会再去推断一遍
 			return autowireConstructor(beanName, mbd, ctors, args);
 		}
 
@@ -1312,6 +1372,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			for (BeanPostProcessor bp : getBeanPostProcessors()) {
 				if (bp instanceof SmartInstantiationAwareBeanPostProcessor) {
 					SmartInstantiationAwareBeanPostProcessor ibp = (SmartInstantiationAwareBeanPostProcessor) bp;
+					// 具体是由springn内置的AutowiredAnnotationBeanPostProcessor进行推断
 					Constructor<?>[] ctors = ibp.determineCandidateConstructors(beanClass, beanName);
 					if (ctors != null) {
 						return ctors;
@@ -1416,6 +1477,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		 * 就是不需要spring为我们提前终止设置属性，一般没有
 		 * =========================================
 		 * 第五次调用后置处理器
+		 * 供我们程序员去扩展，可能某些属性我们就是不需要使用属性注入，
+		 * 而是使用我们自己为其注入
 		 * ==========================================
 		 */
 		if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
@@ -1424,6 +1487,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 					InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
 					if (!ibp.postProcessAfterInstantiation(bw.getWrappedInstance(), beanName)) {
 						continueWithPropertyPopulation = false;
+						// 只要有一个后置处理器返回为false，那么spring就不会去属性注入啦。
+						// 讲道理spring的所有内置处理器都是返回true的，除非我们程序员外部去修改
 						break;
 					}
 				}
@@ -1435,7 +1500,18 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		/**
-		 * sping可以通过修改bd定义设置一些属性给bean。就和构造方法设置属性值一样
+		 * sping中可以
+		 * GenericBeanDefinition indexDao12 =
+		 * 				(GenericBeanDefinition)beanFactory.getBeanDefinition("indexDao12");
+		 * 		indexDao12.getPropertyValues().addPropertyValue(new PropertyValue("name1", "chen"));
+		 * 这样的话，spring就会去调用我们的IndexDao12中的public void setName1(String s)方法
+		 * 并且，把value的属性注入进去
+		 *
+		 * 甚至你可以
+		 * indexDao12.getPropertyValues().addPropertyValue(new PropertyValue("name1", new IndexDao9()));
+		 * 然偶setName1(IndexDao9 indexDao9)也会正常调用
+		 *
+		 * 并且byType中也会去找到所有的符合规范的set方法放在pvs中，最后统一处理
 		 */
 		PropertyValues pvs = (mbd.hasPropertyValues() ? mbd.getPropertyValues() : null);
 		// 默认mbd.getResolvedAutowireMode()是AUTOWIRE_NO
@@ -1443,15 +1519,33 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			MutablePropertyValues newPvs = new MutablePropertyValues(pvs);
 			// Add property values based on autowire by name if applicable.
 			if (mbd.getResolvedAutowireMode() == AUTOWIRE_BY_NAME) {
+				/**
+				 * =====================================================================
+				 * byName和byType差不多，只不过byName是找到setXX之后
+				 * 然后根据XX去getBean之后放到pvs中，然后pvs中又会去调用对应的setXX方法，将value注入进去
+				 * Object bean = getBean(propertyName);
+				 * pvs.add(propertyName, bean);
+				 *
+				 * 只不过byType会自己去找set(IndexDao9 indexDao9)
+				 * IndexDao9放入到pvs.add(propertyName, bean)中。这样的话，对于set的名字就不用那么严格啦，
+				 * 所以讲道理来说byType是更有效的，因为它对setCCC的名字没有严格要求
+				 * =====================================================================
+				 */
 				autowireByName(beanName, mbd, bw, newPvs);
 			}
 			// Add property values based on autowire by type if applicable.
 			if (mbd.getResolvedAutowireMode() == AUTOWIRE_BY_TYPE) {
 				/**
-				 * 这个是用set注入的，就是直接调用set方法
+				 * =================================================================================
+				 * 这个是用set注入的，就是直接调用set方法。
+				 * 会找出所有符合（就是setXX里面的属性是在spring容器中能够找到的）的set方法，
+				 * 然后放在pvs中
+				 * ======================================================================
 				 */
 				autowireByType(beanName, mbd, bw, newPvs);
 			}
+			// 上面的byName,byType是为了去找到newPvs, 属性注入还是会走下面的代码的
+			// newPvs就是为了找到set方法，(主要是setY，就会把y找出来)怎么找出来的，就非常麻烦啦。。。
 			pvs = newPvs;
 		}
 
@@ -1488,6 +1582,10 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		if (pvs != null) {
+			// 属性值(1) 程序员手动提供的，2) spring找出来的)应用上
+			// indexDao12.getPropertyValues().addPropertyValue(new PropertyValue("name1", "chen"));
+			// public void setY(IndexDao9 indexDao9) {}
+			// 在这里会完成byType的属性的set方法调用
 			applyPropertyValues(beanName, mbd, bw, pvs);
 		}
 	}
@@ -1507,6 +1605,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		String[] propertyNames = unsatisfiedNonSimpleProperties(mbd, bw);
 		for (String propertyName : propertyNames) {
 			if (containsBean(propertyName)) {
+				// 通过byName去获取getBean
 				Object bean = getBean(propertyName);
 				pvs.add(propertyName, bean);
 				registerDependentBean(propertyName, beanName);
@@ -1545,7 +1644,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		Set<String> autowiredBeanNames = new LinkedHashSet<>(4);
 		/**
-		 *
+		 * 这里面去找setY中y
 		 */
 		String[] propertyNames = unsatisfiedNonSimpleProperties(mbd, bw);
 		for (String propertyName : propertyNames) {
@@ -1592,7 +1691,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		Set<String> result = new TreeSet<>();
 		// pvs 通过外部直接设置的，也就是spring自动设置的，而不需要我们自动装配给它
 		PropertyValues pvs = mbd.getPropertyValues();
-		// pds所有的属性都是可以拿出来
+		// pds所有的属性描述器都是可以拿出来 ，spring是使用java的api拿到所有的set属性
+		// 可以跟进去好好分析一下
 		PropertyDescriptor[] pds = bw.getPropertyDescriptors();
 		for (PropertyDescriptor pd : pds) {
 			// pd.getWriteMethod() 有set方法，就可以把很多属性给忽略掉，所以这就印证啦spring的
@@ -1778,6 +1878,11 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		// Set our (possibly massaged) deep copy.
 		try {
+			/**
+			 * ======================================
+			 * 在这里去调用set方法
+			 * ======================================
+			 */
 			bw.setPropertyValues(new MutablePropertyValues(deepCopy));
 		}
 		catch (BeansException ex) {

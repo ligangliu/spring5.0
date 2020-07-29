@@ -228,7 +228,9 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 
 	@Override
 	public void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class<?> beanType, String beanName) {
+		// 找到有注解的@Autowired和@Value的属性和方法(方法上加注解会为该方法的参数注入属性并且调用该方法)
 		InjectionMetadata metadata = findAutowiringMetadata(beanName, beanType, null);
+		// 看不懂。。。。就是加了一个checkedElements的list,在上一步find的时候应该是有一个list的啦
 		metadata.checkConfigMembers(beanDefinition);
 	}
 
@@ -264,14 +266,18 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 		}
 
 		// Quick check on the concurrent map first, with minimal locking.
+		// candidateConstructorsCache已经被推断过的放在里面，做一个缓存，如果被推断过，就不用再推断啦，
+		// 讲道理这里不会用到呀，想不到应用场景。。。。
 		Constructor<?>[] candidateConstructors = this.candidateConstructorsCache.get(beanClass);
 		if (candidateConstructors == null) {
 			// Fully synchronized resolution now...
 			synchronized (this.candidateConstructorsCache) {
+				// 又拿一遍。。。。防止多线程？？？？类似于单例模式 double check????
 				candidateConstructors = this.candidateConstructorsCache.get(beanClass);
 				if (candidateConstructors == null) {
 					Constructor<?>[] rawCandidates;
 					try {
+						// 拿到所有的构造方法，还没有推断
 						rawCandidates = beanClass.getDeclaredConstructors();
 					}
 					catch (Throwable ex) {
@@ -279,9 +285,19 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 								"Resolution of declared constructors on bean Class [" + beanClass.getName() +
 								"] from ClassLoader [" + beanClass.getClassLoader() + "] failed", ex);
 					}
+					// candidates 存的是合格的构造方法，不会超过rawCandidates.length
 					List<Constructor<?>> candidates = new ArrayList<>(rawCandidates.length);
 					Constructor<?> requiredConstructor = null;
 					Constructor<?> defaultConstructor = null;
+					/**
+					 * 啥叫primaryConstructor？？？？把推断主要的构造方法委托给 Kotlin
+					 * 能推断 {
+					 *     Kotlin类
+					 *     java类
+					 * }
+					 * 不能推断，就不用管了
+					 * 看里面的doc文档，写到对于非kotlin语言的类，永远找到的是null。是不是很无聊。。。。
+					 */
 					Constructor<?> primaryConstructor = BeanUtils.findPrimaryConstructor(beanClass);
 					int nonSyntheticConstructors = 0;
 					for (Constructor<?> candidate : rawCandidates) {
@@ -291,9 +307,11 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 						else if (primaryConstructor != null) {
 							continue;
 						}
+						// 如在构造方法上加@Autowired注解
 						AnnotationAttributes ann = findAutowiredAnnotation(candidate);
 						if (ann == null) {
 							Class<?> userClass = ClassUtils.getUserClass(beanClass);
+							// 内部类和factoryBean可能满足不!=
 							if (userClass != beanClass) {
 								try {
 									Constructor<?> superCtor =
@@ -324,6 +342,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 							}
 							candidates.add(candidate);
 						}
+						// 表示只要有无参构方法，就肯定是调用无参构造方法进行创建
 						else if (candidate.getParameterCount() == 0) {
 							defaultConstructor = candidate;
 						}
@@ -343,6 +362,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 						}
 						candidateConstructors = candidates.toArray(new Constructor<?>[0]);
 					}
+					// 如果有一个合格的，且里面参数大于0，那么就会选择它
 					else if (rawCandidates.length == 1 && rawCandidates[0].getParameterCount() > 0) {
 						candidateConstructors = new Constructor<?>[] {rawCandidates[0]};
 					}
@@ -360,6 +380,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 				}
 			}
 		}
+		// 如果没有找到，就返回null
 		return (candidateConstructors.length > 0 ? candidateConstructors : null);
 	}
 
@@ -369,7 +390,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 	@Override
 	public PropertyValues postProcessPropertyValues(
 			PropertyValues pvs, PropertyDescriptor[] pds, Object bean, String beanName) throws BeanCreationException {
-
+		// 在第三次执行后置处理器的时候是已经找到了的，所以直接从缓存中可以拿到
 		InjectionMetadata metadata = findAutowiringMetadata(beanName, bean.getClass(), pvs);
 		try {
 			metadata.inject(bean, beanName, pvs);
@@ -412,12 +433,15 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 		InjectionMetadata metadata = this.injectionMetadataCache.get(cacheKey);
 		if (InjectionMetadata.needsRefresh(metadata, clazz)) {
 			synchronized (this.injectionMetadataCache) {
+				// double check
 				metadata = this.injectionMetadataCache.get(cacheKey);
+				// 需不需要刷新，底层就是判断一下是否为空...，spring就喜欢封装方法。。。
 				if (InjectionMetadata.needsRefresh(metadata, clazz)) {
 					if (metadata != null) {
 						metadata.clear(pvs);
 					}
 					metadata = buildAutowiringMetadata(clazz);
+					// 放入缓存中
 					this.injectionMetadataCache.put(cacheKey, metadata);
 				}
 			}
@@ -431,10 +455,12 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 
 		do {
 			final List<InjectionMetadata.InjectedElement> currElements = new ArrayList<>();
-
+			// doWithLocalFields会getDeclaredFields(clazz)
 			ReflectionUtils.doWithLocalFields(targetClass, field -> {
+				// 里面会找@Autowired 和 @Value
 				AnnotationAttributes ann = findAutowiredAnnotation(field);
 				if (ann != null) {
+					// 这里不支持stataic，这也就是为啥我们的属性注入的时候不能是static
 					if (Modifier.isStatic(field.getModifiers())) {
 						if (logger.isWarnEnabled()) {
 							logger.warn("Autowired annotation is not supported on static fields: " + field);
@@ -442,10 +468,17 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 						return;
 					}
 					boolean required = determineRequiredStatus(ann);
+					// 添加到需要注入的属性列表中
 					currElements.add(new AutowiredFieldElement(field, required));
 				}
 			});
 
+			/**
+			 * 找到需要注入的方法,
+			 * 但是没怎么用过。。。。
+			 * 基本上和上面的逻辑是差不多的
+			 * 在代码中试过了，就是在方法中加入@Autowired的话，那么spring会调用该方法，并且为该方法中的参数注入属性
+			 */
 			ReflectionUtils.doWithLocalMethods(targetClass, method -> {
 				Method bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
 				if (!BridgeMethodResolver.isVisibilityBridgeMethodPair(method, bridgedMethod)) {
@@ -467,6 +500,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 					}
 					boolean required = determineRequiredStatus(ann);
 					PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+					// 只不过添加的是AutowiredMethodElement 肯定是和AutowiredFieldElement 实现了同一个接口
 					currElements.add(new AutowiredMethodElement(method, required, pd));
 				}
 			});
@@ -572,7 +606,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 		@Override
 		protected void inject(Object bean, @Nullable String beanName, @Nullable PropertyValues pvs) throws Throwable {
 			// 就是类中需要注入的的属性
-			Field field = (Field) this.member;
+			Field field = (Field) this.member; // member是属性
 			Object value;
 			if (this.cached) {
 				value = resolvedCachedArgument(beanName, this.cachedFieldValue);
@@ -580,12 +614,16 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 			else {
 				DependencyDescriptor desc = new DependencyDescriptor(field, this.required);
 				desc.setContainingClass(bean.getClass());
+				// 存我们需要注入的beanNames
 				Set<String> autowiredBeanNames = new LinkedHashSet<>(1);
 				Assert.state(beanFactory != null, "No BeanFactory available");
+				// TypeConverter 处理spring的字符转换等，如将字符串转换成对象
 				TypeConverter typeConverter = beanFactory.getTypeConverter();
 				try {
 					/**
-					 *
+					 * value 肯定就是我们从spring容器中拿出来的，有可能这个时候被注入的属性
+					 * 还没有完成生命周期呢。所以resolveDependency里面就是调用getBean，
+					 * 有则创建，没有则去创建
 					 */
 					value = beanFactory.resolveDependency(desc, beanName, autowiredBeanNames, typeConverter);
 				}
@@ -615,6 +653,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 			}
 			if (value != null) {
 				ReflectionUtils.makeAccessible(field);
+				// 就是直接反射 field.set()就是属性注入
 				field.set(bean, value);
 			}
 		}

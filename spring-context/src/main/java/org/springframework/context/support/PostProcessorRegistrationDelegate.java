@@ -50,13 +50,28 @@ final class PostProcessorRegistrationDelegate {
 
 	public static void invokeBeanFactoryPostProcessors(
 			ConfigurableListableBeanFactory beanFactory, List<BeanFactoryPostProcessor> beanFactoryPostProcessors) {
-
+		/**
+		 * List<BeanFactoryPostProcessor> beanFactoryPostProcessors
+		 * 估计百分之90是不会有值的
+		 * beanFactoryPostProcessors 是由getBeanFactoryPostProcessors()得到的
+		 * 这个是从一个list中直接获取
+		 * 在 我们外部通过api加入的context.addBeanFactoryPostProcessor(xxx);
+		 * 会直接放入到这个beanFactoryPostProcessors中。但是绝大多数的情况下是不会有的，
+		 * 只不过这是一个拓展点
+		 * 但是大部分不会有这种需求吧。。。。。直接@Bean添加进去不好嘛？？除非有一些在扫描之前需要干的活
+		 */
 		// Invoke BeanDefinitionRegistryPostProcessors first, if any.
 		Set<String> processedBeans = new HashSet<>();
 
 		if (beanFactory instanceof BeanDefinitionRegistry) {
 			BeanDefinitionRegistry registry = (BeanDefinitionRegistry) beanFactory;
 			/**
+			 *
+			 * BeanDefinitionRegistryPostProcessor
+			 * 1，程序员提供的
+			 * 2，spring内置的
+			 * 3，扫描之后又得到的
+			 *
 			 * 因为我们自己定义的BeanFactoryPostProcessor可以有两种方式
 			 * 1.实现BeanFactoryPostProcessor
 			 * 2.实现BeanDefinitionRegistryPostProcessor
@@ -70,14 +85,20 @@ final class PostProcessorRegistrationDelegate {
 			//BeanDefinitionRegistryPostProcessor是BeanFactoryPostProcessor的子类
 			List<BeanDefinitionRegistryPostProcessor> registryProcessors = new ArrayList<>();
 
+			// 这里的beanFactoryPostProcessors 是由getBeanFactoryPostProcessors()得到的，
+			// 具体是返回this.beanFactoryPostProcessors，讲道理第一次执行过来的时候应该是为空的
+			// 除非程序在外部调用context.addBeanFactoryPostProcessor(null);直接添加的
 			for (BeanFactoryPostProcessor postProcessor : beanFactoryPostProcessors) {
+				// 这里外部的bean还没有扫描进去的呢，所以讲道理这里是不会有外部的BeanDefinitionRegistryPostProcessor
 				//判断其是BeanDefinitionRegistryPostProcessor还是BeanFactoryPostProcessor
 				if (postProcessor instanceof BeanDefinitionRegistryPostProcessor) {
 					BeanDefinitionRegistryPostProcessor registryProcessor =
 							(BeanDefinitionRegistryPostProcessor) postProcessor;
 					// 这个是spring自己实现的，它只不过拓展了，多实现了一个postProcessBeanDefinitionRegistry方法
+					// spring最牛逼的一个工厂后置处理器 ConfigurationClassPostProcessor就是进行扫描所有的bd
 					registryProcessor.postProcessBeanDefinitionRegistry(registry);
-					//执行完上面的方法，也是放入了registryProcessors中的列表中的
+					//执行完上面的方法，也是放入了registryProcessors中的列表中的，
+					// 因为下面还需要执行它的BeanFactoryPostProcessor接口的postProcessBeanFactory方法
 					registryProcessors.add(registryProcessor);
 				}
 				else {
@@ -107,12 +128,15 @@ final class PostProcessorRegistrationDelegate {
 					//讲道理，如果一切按默认的话，这里应该是可以得到ConfigurationClassPostProcessor
 					beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
 			for (String ppName : postProcessorNames) {
+				// 难道还必须实现 PriorityOrdered 该接口嘛？这个接口也没啥用呀，除了标记一下
 				if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
 					//获取到了spring内置的BeanFactoryPostProcessor的ConfigurationClassPostProcessor
 					//将其添加到currentRegistryProcessors中list中
 					//看到这里没有，是通过getBean获取的，所以说这里的BeanFactoryPostProcessor是初始化好的
 					// 通过getBean->将该类的beanDefinition信息初始化出来
+					// currentRegistryProcessors 表示正在执行的后置处理器
 					currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
+					// processedBeans用于后续排除已经被执行过的后置处理器
 					processedBeans.add(ppName);
 				}
 			}
@@ -120,11 +144,9 @@ final class PostProcessorRegistrationDelegate {
 			//registryProcessors 中的所有的接口都是调用BeanFactoryPostProcessor接口下的 postProcessBeanFactory方法
 			registryProcessors.addAll(currentRegistryProcessors);
 			/**
-			 * 循环所有的Spring内置的BeanDefinitionRegistryPostProcessor
-			 * 其实就是只有一个ConfigurationClassPostProcessor
-			 * 通过ConfigurationClassPostProcessor扫描所有的bean信息
+			 * 回调用所有自定义的实现了BeanDefinitionRegistryPostProcessor接口的类
+			 * 讲道理第一次这里应该只有ConfigurationClassPostProcessor
 			 *
-			 * 所以说这个方法非常重要！！！！！！！！
 			 */
 			invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
 			currentRegistryProcessors.clear();
@@ -132,7 +154,7 @@ final class PostProcessorRegistrationDelegate {
 			// Next, invoke the BeanDefinitionRegistryPostProcessors that implement Ordered.
 			/**
 			 * 这里为啥来一遍？？？
-			 * 是因为可能在配置类中扫描得到了我们代码是是是实现了BeanDefinitionRegistryPostProcessor接口
+			 * 是因为可能在配置类中扫描得到了我们代码是是是实现了BeanDefinitionRegistryPostProcessor接口。
 			 */
 			postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
 			for (String ppName : postProcessorNames) {
@@ -150,9 +172,16 @@ final class PostProcessorRegistrationDelegate {
 			/**
 			 * 一直递归处理，因为有可能，配置类 中又有配置类
 			 * 然后 配置类中配置类，再有配置类呢？
+			 * 而且上面分别是需要满足
+			 *  beanFactory.isTypeMatch(ppName, PriorityOrdered.class)
+			 *  beanFactory.isTypeMatch(ppName, Ordered.class)
+			 *  下面是没有这个判断的。即使普通的实现BeanDefinitionRegistryPostProcessor接口的
+			 *  没有实现PriorityOrdered和Ordered接口的
+			 *
 			 */
 			// Finally, invoke all other BeanDefinitionRegistryPostProcessors until no further ones appear.
 			boolean reiterate = true;
+			// while循环是因为BeanDefinitionRegistryPostProcessor需要扫描的功能，可能又会扫描得到
 			while (reiterate) {
 				reiterate = false;
 				postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
@@ -170,7 +199,10 @@ final class PostProcessorRegistrationDelegate {
 			}
 
 			/**
-			 * 当while循环执行完成之后我们所有的beanDefiniton(包含@Bean注解)都已经被添加到beanDefinitionMap中啦
+			 * ===============================================================================
+			 * 当while循环执行完成之后我们所有的beanDefiniton(包含@Bean注解，Import等各种情况)
+			 * 都已经被添加到beanDefinitionMap中啦
+			 * ===============================================================================
 			 */
 
 			// Now, invoke the postProcessBeanFactory callback of all processors handled so far.
@@ -182,11 +214,24 @@ final class PostProcessorRegistrationDelegate {
 			 * registryProcessors中存放的实现了BeanDefinitionRegistryPostProcessor
 			 * 而BeanDefinitionRegistryPostProcessor又是BeanFactoryPostProcessor的子类，所以也会执行
 			 *
-			 * registryProcessors：主要是ConfigurationClassPostProcessor，它里面的方法会去为@Configuration生成代理
+			 * =====================================================================
+			 * registryProcessors：主要是ConfigurationClassPostProcessor，
+			 * 它里面的方法会去为@Configuration生成代理，也就是为AppConfig通过cglib生成代理，
+			 * 然后放入到AppConfig中bd的setBeanClass(改成生成了cglib的类)
+			 * 然后在处理@Bean的时候，肯定是直接通过bd配置的信息找到AppConfig去调用方法生成对象，而这里肯定会先
+			 * getBean("appConfig")，但是这是一个被cglib代理的类啦，然后通过调用里面的方法就能对
+			 * @Bean构造对象出来
+			 *
+			 * 并且注册了一个beanFactory.addBeanPostProcessor(new ImportAwareBeanPostProcessor(beanFactory))
+			 * 的后置处理器。ImportAwareBeanPostProcessor是一个BeanPostProcessor会为实现了ApplcationAware等
+			 * 接口的注入容器
+			 * =====================================================================
+			 *
 			 */
 			invokeBeanFactoryPostProcessors(registryProcessors, beanFactory);
 			/**
-			 * 执行的是我们自定义的BeanFactoryPostProcessor(是通过context.register注册进去的)
+			 * 执行的是我们自定义的BeanFactoryPostProcessor
+			 * (是通过context.addBeanFactoryPostProcessor(null);注册进去的)
 			 */
 			invokeBeanFactoryPostProcessors(regularPostProcessors, beanFactory);
 		}
@@ -196,7 +241,16 @@ final class PostProcessorRegistrationDelegate {
 			invokeBeanFactoryPostProcessors(beanFactoryPostProcessors, beanFactory);
 		}
 		/**
-		 * 下面的逻辑应该是不会有处理的
+		 * BeanFactoryPostProcessor
+		 * 1，程序提供的
+		 * 2，spring内置的
+		 * 因为BeanDefinitionRegistryPostProcessor是子接口，上述的情况已经在上面执行完毕啦。
+		 * =========================================================
+		 * 3，扫描得到的 (下面的代码就是处理这种扫描得到的类)
+		 * =========================================================
+		 *
+		 * 下面的逻辑是处理我们自定义的类的实现了BeanFactoryPostProcessor接口的类
+		 * 因为在上面我们已经扫描得到了所有bd啦,上面只是处理了spring内置的BeanFactoryPostProcessor啦
 		 */
 		// Do not initialize FactoryBeans here: We need to leave all regular beans
 		// uninitialized to let the bean factory post-processors apply to them!
@@ -209,10 +263,12 @@ final class PostProcessorRegistrationDelegate {
 		List<String> orderedPostProcessorNames = new ArrayList<>();
 		List<String> nonOrderedPostProcessorNames = new ArrayList<>();
 		for (String ppName : postProcessorNames) {
-			//如果包含了，就说明都不干，一般情况下， 这里肯定没有新的，都已经被处理了的
+			//如果包含了，说明在上面已经处理过了，如springn内置的实现了BeanDefinitionRegistryPostProcessor
+			// 接口，以及程序外部直接注册的都已经被执行完毕了的
 			if (processedBeans.contains(ppName)) {
 				// skip - already processed in first phase above
 			}
+			// 下面可能就是一些排序吧,就和上面的逻辑是一样的，相当是有一个优先级执行顺序而已
 			else if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
 				priorityOrderedPostProcessors.add(beanFactory.getBean(ppName, BeanFactoryPostProcessor.class));
 			}

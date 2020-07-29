@@ -78,6 +78,7 @@ class ComponentScanAnnotationParser {
 	public Set<BeanDefinitionHolder> parse(AnnotationAttributes componentScan, final String declaringClass) {
 		// this.scanner = new ClassPathBeanDefinitionScanner(this); 是外面给程序员手动调用scan而用
 		// 而这里的扫描是重新new了一个扫描类
+		// 这里面会初始化扫描过滤@Component注解，可以进构造方法看看
 		ClassPathBeanDefinitionScanner scanner = new ClassPathBeanDefinitionScanner(this.registry,
 				componentScan.getBoolean("useDefaultFilters"), this.environment, this.resourceLoader);
 		//beanName的生成器
@@ -101,7 +102,8 @@ class ComponentScanAnnotationParser {
 		scanner.setResourcePattern(componentScan.getString("resourcePattern"));
 
 		/**
-		 * 遍历CommentScan当中需要过滤的东西
+		 * 遍历CommentScan当中需要过滤的条件
+		 * 因为扫描是的到所有的类，我们应该只需要@Component的注解的类
 		 */
 		for (AnnotationAttributes filter : componentScan.getAnnotationArray("includeFilters")) {
 			for (TypeFilter typeFilter : typeFiltersFor(filter)) {

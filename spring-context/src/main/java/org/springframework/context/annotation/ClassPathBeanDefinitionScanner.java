@@ -163,6 +163,7 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
 		this.registry = registry;
 
 		if (useDefaultFilters) {
+			// 这里面会扫描添加过滤的@Component
 			registerDefaultFilters();
 		}
 		setEnvironment(environment);
@@ -276,7 +277,7 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
 		Set<BeanDefinitionHolder> beanDefinitions = new LinkedHashSet<>();
 		for (String basePackage : basePackages) {
 			/**
-			 * 利用ASM(一个开源技术)读取class文件
+			 * 利用ASM(一个开源技术)读取class文件(底层就是通过io的咯)
 			 * 所有扫描出来的都是ScannedGenericBeanDefinition
 			 * ScannedGenericBeanDefinition extends GenericBeanDefinition implements AnnotatedBeanDefinition
 			 * 跟进去，看注释，有一个mybatis整合spring，我以前一直没有想通的问题的解释，就是@MapperScan之后，

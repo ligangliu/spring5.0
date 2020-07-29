@@ -79,6 +79,8 @@ public class InjectionMetadata {
 	}
 
 	public void inject(Object target, @Nullable String beanName, @Nullable PropertyValues pvs) throws Throwable {
+		// 这里调用的是checkedElements,不知道为什么不使用currElements（子路大神也不知道。。。）
+		// 感觉checkedElements 和 currElements 就是一样的，不知道spring为啥要这么干
 		Collection<InjectedElement> checkedElements = this.checkedElements;
 		Collection<InjectedElement> elementsToIterate =
 				(checkedElements != null ? checkedElements : this.injectedElements);
@@ -87,8 +89,9 @@ public class InjectionMetadata {
 				if (logger.isDebugEnabled()) {
 					logger.debug("Processing injected element of bean '" + beanName + "': " + element);
 				}
-				// 调用org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor.AutowiredFieldElement.inject
-				element.inject(target, beanName, pvs);
+				// 调用org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor.AutowiredFieldElement.inject 或 AutowiredMethodElement.inject
+				// 这里包含了@Value，@Autowired的属性和方法的注入
+				element.inject(target, beanName, pvs); // 属性和方法调用的子类是不一样的
 			}
 		}
 	}
