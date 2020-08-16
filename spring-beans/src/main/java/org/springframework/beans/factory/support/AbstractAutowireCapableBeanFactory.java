@@ -567,6 +567,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			 * 实例化，就是通过反射使用构造方法创建，判断是否使用默认构造方法构造，无参构造的时候是非常直接反射构造就好
 			 * 如果是有参构造，会推断构造方法，使用构造方法反射创建出来
 			 * 使用推断构造方法也是相当复杂的。。。。
+			 *
+			 * 此时仅仅是对象，还没有进行属性的注入
 			 * ====================================================================
 			 */
 			instanceWrapper = createBeanInstance(beanName, mbd, args);
@@ -622,6 +624,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		 * context.refresh();
 		 *
 		 */
+		// isSingletonCurrentlyInCreation 在第一次调用getSingleton()的时候，
+		// 放入进去的，注意第一次和第二次是方法的重载
 		boolean earlySingletonExposure = (mbd.isSingleton() && this.allowCircularReferences &&
 				isSingletonCurrentlyInCreation(beanName));
 		if (earlySingletonExposure) {
@@ -648,6 +652,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			populateBean(beanName, mbd, instanceWrapper);
 			/**
 			 * ==========================================
+			 * 执行各种生命周期的回调方法
 			 * 如果有代理，完成代理，生成代理对象。
 			 * 这里面会去执行后置处理器，生成代理对象
 			 * ==========================================
@@ -1546,6 +1551,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 			// 上面的byName,byType是为了去找到newPvs, 属性注入还是会走下面的代码的
 			// newPvs就是为了找到set方法，(主要是setY，就会把y找出来)怎么找出来的，就非常麻烦啦。。。
+			// 所以newPvs就是自定义添加的和通过找set找到的
 			pvs = newPvs;
 		}
 
@@ -1644,6 +1650,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		Set<String> autowiredBeanNames = new LinkedHashSet<>(4);
 		/**
+		 * 即里面去找所有的set方法
 		 * 这里面去找setY中y
 		 */
 		String[] propertyNames = unsatisfiedNonSimpleProperties(mbd, bw);
@@ -1659,6 +1666,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 					DependencyDescriptor desc = new AutowireByTypeDependencyDescriptor(methodParam, eager);
 					Object autowiredArgument = resolveDependency(desc, beanName, autowiredBeanNames, converter);
 					if (autowiredArgument != null) {
+						// 添加到pvs中，因为pvs中还有自定义添加的，其实如果你去看spring-mybatis的整合源码这里就会有这一个自定义和
+						// 通过set方法添加的
+						// indexDao12.getPropertyValues().addPropertyValue(new PropertyValue("name1", new IndexDao9()));
 						pvs.add(propertyName, autowiredArgument);
 					}
 					for (String autowiredBeanName : autowiredBeanNames) {

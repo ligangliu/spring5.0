@@ -339,6 +339,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 
 	@Override
 	public <T> T getBean(Class<T> requiredType, @Nullable Object... args) throws BeansException {
+		// 从这里调用链进去
 		NamedBeanHolder<T> namedBean = resolveNamedBean(requiredType, args);
 		if (namedBean != null) {
 			return namedBean.getBeanInstance();
@@ -1023,6 +1024,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	@Nullable
 	private <T> NamedBeanHolder<T> resolveNamedBean(Class<T> requiredType, @Nullable Object... args) throws BeansException {
 		Assert.notNull(requiredType, "Required type must not be null");
+		// 会一个一个遍历处理FactoryBean的情况
 		String[] candidateNames = getBeanNamesForType(requiredType);
 
 		if (candidateNames.length > 1) {
@@ -1143,6 +1145,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 
 			// 这里拿到了依赖的类型，这里面是根据byType去mapping的，会遍历所有的beanDefinitionNames，
 			// 然后在这里面会去处理getObject的类型来
+			// 里面还会处理@Autowired ApplicationContext的情况
 			Map<String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
 			if (matchingBeans.isEmpty()) {
 				if (isRequired(descriptor)) {
@@ -1335,6 +1338,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		// 如果注入的是特殊类型，这里需要做个特殊的处理
 		// resolvableDependencies.keySet() 分别是4种特殊的类型
 		// ApplicationEventPublisher，ResourceLoader, BeanFactory, ApplicationContext
+		// 具体是在refresh()中的prepareBeanFactory(beanFactory)中添加的
 		for (Class<?> autowiringType : this.resolvableDependencies.keySet()) {
 			if (autowiringType.isAssignableFrom(requiredType)) {
 				Object autowiringValue = this.resolvableDependencies.get(autowiringType);

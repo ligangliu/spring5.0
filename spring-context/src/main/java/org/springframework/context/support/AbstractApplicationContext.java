@@ -534,7 +534,9 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 			 * 准备工厂，
 			 * 1) 添加了一个类加载器
 			 * 2) 添加了一个bean表达式
-			 * 2) 添加了后置处理器，其中有一个很牛逼的后置处理器就是ApplicationContextAwareProcessor
+			 * 3) 添加了后置处理器，其中有一个很牛逼的后置处理器就是ApplicationContextAwareProcessor
+			 * 4) 添加了一些类到resolvableDependencies这个map中，如ApplicationContext，这样得话就可以供我们在
+			 * 代码层面通过@Autowired注入啦
 			 */
 			prepareBeanFactory(beanFactory);
 
@@ -749,6 +751,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		/**
 		 * 我们在我们的bean中注册@BeanFactory ，spring会将ConfigurableListableBeanFactory beanFactory
 		 * 注册给我们
+		 * 比如我们通过@Autowired注入ApplicationContext的时候，也会从resolvableDependencies这个map中注入
 		 */
 		beanFactory.registerResolvableDependency(BeanFactory.class, beanFactory);
 		beanFactory.registerResolvableDependency(ResourceLoader.class, this);

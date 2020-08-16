@@ -2,6 +2,7 @@ package com.chen.test;
 
 import com.chen.app.AppConfig;
 import com.chen.dao.IndexDao12;
+import com.chen.dao.IndexDao13;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 /**
@@ -15,8 +16,8 @@ public class Test {
 		AnnotationConfigApplicationContext context =
 				new AnnotationConfigApplicationContext(AppConfig.class);
 
-		AppConfig indexDao12 = context.getBean(AppConfig.class);
-		indexDao12.test();
+		IndexDao13 indexDao13 = context.getBean(IndexDao13.class);
+		indexDao13.test();
 	}
 
 }

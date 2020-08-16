@@ -61,5 +61,10 @@ public class IndexDao12 {
 	}
 
 
+	public void setXXXX(IndexDao9 indexDao9) {
+		System.out.println("_____________________");
+		System.out.println("_____________________");
+	}
+
 
 }

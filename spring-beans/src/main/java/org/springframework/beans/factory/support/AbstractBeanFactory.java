@@ -278,7 +278,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			// Fail if we're already creating this bean instance:
 			// We're assumably within a circular reference.
 			/**
-			 * 在前面的时候已经判断了是单列的,不知道spring为啥还需要在这里判断一下？？？
+			 * 在前面的时候已经判断了是单列的,
+			 * 在原型的且存在循环依赖的情况下，这里会抛出异常
 			 */
 			if (isPrototypeCurrentlyInCreation(beanName)) {
 				throw new BeanCurrentlyInCreationException(beanName);
