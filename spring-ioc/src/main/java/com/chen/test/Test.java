@@ -1,7 +1,6 @@
 package com.chen.test;
 
 import com.chen.app.AppConfig;
-import com.chen.dao.IndexDao12;
 import com.chen.dao.IndexDao13;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
